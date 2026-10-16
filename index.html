@@ -1,0 +1,2191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>얌의 세무노트 - 간이사업자 Pro</title>
+    <!-- Tailwind CSS CDN 및 폰트/아이콘 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSans.css">
+    <!-- 공식 엑셀(.xlsx) 파싱 및 다운로드를 위한 SheetJS / ExcelJS 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        body { 
+            font-family: 'Pretendard', sans-serif; 
+            background-color: #f8fafc; 
+            color: #1e293b; 
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        input, textarea, select {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+        }
+        .bg-navy-900 { background-color: #0f172a; }
+        .bg-navy-800 { background-color: #1e293b; }
+        .border-navy-700 { border-color: #334155; }
+        .tab-btn.active { border-bottom: 3px solid #10b981; color: #047857; font-weight: 700; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .calendar-day { min-height: 75px; transition: all 0.2s; }
+        .calendar-day:hover { background-color: #f1f5f9; }
+        
+        .recipe-input { 
+            width: 100%; 
+            background: #ffffff; 
+            border: 1px solid #cbd5e1; 
+            border-radius: 6px; 
+            outline: none; 
+            font-size: 12px; 
+            padding: 6px 8px; 
+            font-family: 'GmarketSansMedium', 'Pretendard', sans-serif;
+            transition: all 0.15s ease;
+        }
+        .recipe-input:focus { 
+            background: #f0fdf4; 
+            border-color: #10b981; 
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15); 
+        }
+
+        .ledger-new-row-container {
+            background-color: #f0fdf4;
+            border-bottom: 2px solid #10b981;
+        }
+        
+        .font-mono-num {
+            font-family: 'GmarketSansMedium', 'GmarketSans', 'Pretendard', sans-serif;
+        }
+
+        .custom-autocomplete-dropdown {
+            position: absolute;
+            left: 0;
+            top: 100%;
+            width: 100%;
+            max-height: 160px;
+            overflow-y: auto;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        .autocomplete-item {
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #334155;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .autocomplete-item:hover, .autocomplete-item.selected {
+            background-color: #f0fdf4;
+            color: #047857;
+            font-weight: 700;
+        }
+        .truncate-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-emerald-100">
+
+    <!-- 상단 헤더 -->
+    <header class="bg-navy-900 text-white sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div id="app-logo-icon" class="w-10 h-10 rounded-xl bg-emerald-500 text-navy-900 flex items-center justify-center shadow-inner font-black text-xl">
+                        <i class="fa-solid fa-calculator"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h1 class="font-bold text-lg leading-tight tracking-tight">얌의 <span class="text-emerald-400 font-extrabold">세무노트</span></h1>
+                            <span id="mode-badge" class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-500 text-navy-900">간이사업자 Pro</span>
+                        </div>
+                        <p class="text-xs text-slate-400">의제매입·대표자 자금·홈택스 정밀연동 및 4단계 매출 진단</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2 flex-wrap">
+                    <div class="bg-navy-800 px-3 py-1.5 rounded-xl border border-navy-700 flex items-center space-x-2 text-xs">
+                        <span class="text-slate-400 font-medium">업종 부가가치율:</span>
+                        <select id="global-vat-rate" onchange="changeVatRate(this.value)" class="bg-navy-900 text-emerald-400 font-bold border border-navy-700 rounded px-2 py-0.5 focus:outline-none cursor-pointer">
+                            <option value="0.15">음식점업·소매업 (15%)</option>
+                            <option value="0.10">제조업·숙박업 (10%)</option>
+                            <option value="0.20">건설업·운수업·기타 (20%)</option>
+                            <option value="0.30">부동산임대업·서비스업 (30%)</option>
+                        </select>
+                    </div>
+
+                    <button onclick="exportDataJSON()" class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition flex items-center space-x-1" title="데이터 백업 (.json)">
+                        <i class="fa-solid fa-download"></i><span>백업</span>
+                    </button>
+                    <button onclick="document.getElementById('restore-file-input').click()" class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition flex items-center space-x-1" title="데이터 복원">
+                        <i class="fa-solid fa-upload"></i><span>복원</span>
+                    </button>
+                    <input type="file" id="restore-file-input" class="hidden" accept=".json" onchange="importDataJSON(event)">
+                    <button onclick="openResetModal()" class="px-2.5 py-1.5 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold rounded-xl transition flex items-center space-x-1" title="데이터 초기화">
+                        <i class="fa-solid fa-rotate-ccw"></i><span>초기화</span>
+                    </button>
+
+                    <button onclick="openApiKeyModal()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-key"></i>
+                        <span id="api-key-btn-text">API 키</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 탭 네비게이션 Bar -->
+        <div class="bg-white border-b border-slate-200 text-slate-600 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-1 text-sm font-medium overflow-x-auto custom-scrollbar">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn active py-3 px-4 flex items-center space-x-2 whitespace-nowrap">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>한눈에 보기 (대시보드)</span>
+                </button>
+                <button onclick="switchTab('ledger')" id="tab-ledger" class="tab-btn py-3 px-4 flex items-center space-x-2 whitespace-nowrap">
+                    <i class="fa-solid fa-book text-emerald-600"></i>
+                    <span>장부관리 & 증빙등록</span>
+                </button>
+                <button onclick="switchTab('ownerfund')" id="tab-ownerfund" class="tab-btn py-3 px-4 flex items-center space-x-2 whitespace-nowrap">
+                    <i class="fa-solid fa-wallet text-amber-600"></i>
+                    <span>대표자 인출/투입금 관리</span>
+                </button>
+                <button onclick="switchTab('collect')" id="tab-collect" class="tab-btn py-3 px-4 flex items-center space-x-2 whitespace-nowrap">
+                    <i class="fa-solid fa-file-arrow-up text-blue-600"></i>
+                    <span>홈택스 엑셀 & 증빙수집함</span>
+                </button>
+                <button onclick="switchTab('calendar')" id="tab-calendar" class="tab-btn py-3 px-4 flex items-center space-x-2 whitespace-nowrap">
+                    <i class="fa-solid fa-calendar-days"></i>
+                    <span>세무일정 조회</span>
+                </button>
+                <button onclick="switchTab('taxcalc')" id="tab-taxcalc" class="tab-btn py-3 px-4 flex items-center space-x-2 whitespace-nowrap">
+                    <i class="fa-solid fa-coins"></i>
+                    <span>예상 세금 상세 계산 (신고서식)</span>
+                </button>
+                <button onclick="switchTab('checklist')" id="tab-checklist" class="tab-btn py-3 px-4 flex items-center space-x-2 whitespace-nowrap">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>신고 서류 상세 관리</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 상단 고정 요약 바 (Sticky Summary Bar) -->
+    <div class="bg-emerald-900 text-emerald-50 border-b border-emerald-800 sticky top-16 z-40 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-4 text-xs">
+            <div class="flex items-center space-x-6 flex-wrap gap-y-1">
+                <div class="flex items-center space-x-2">
+                    <span class="text-emerald-300 font-medium">🔵 부가세 예정고지:</span>
+                    <span id="summaryVatPrepaid" class="font-bold text-white text-sm font-mono-num">0 원</span>
+                    <button onclick="openPrepaidModal('vat')" class="px-1.5 py-0.5 bg-emerald-700 hover:bg-emerald-600 rounded text-[11px] transition">등록</button>
+                </div>
+                <div class="flex items-center space-x-2 border-l border-emerald-800 pl-6">
+                    <span class="text-emerald-300 font-medium">🟣 종소세 중간예납:</span>
+                    <span id="summaryIncomePrepaid" class="font-bold text-white text-sm font-mono-num">0 원</span>
+                    <button onclick="openPrepaidModal('income')" class="px-1.5 py-0.5 bg-emerald-700 hover:bg-emerald-600 rounded text-[11px] transition">등록</button>
+                </div>
+                <div class="flex items-center space-x-2 border-l border-emerald-800 pl-6">
+                    <span class="text-emerald-300 font-medium">⚖️ 대표자 자금 순잔액:</span>
+                    <span id="summaryNetOwnerFund" class="font-bold text-amber-300 text-sm font-mono-num">0 원</span>
+                    <span class="text-[10px] text-emerald-400">(인출금 - 투입금)</span>
+                </div>
+            </div>
+            <div>
+                <button onclick="switchTab('ownerfund')" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded shadow-sm flex items-center transition text-xs">
+                    <i class="fa-solid fa-wallet mr-1"></i> [+ 인출/투입금 관리]
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 긴급 마감 알림 바 -->
+    <div id="urgent-banner" class="bg-emerald-500/10 border-b border-emerald-500/20 py-2.5 px-4 text-xs font-semibold text-emerald-900 text-center flex items-center justify-center space-x-2 transition-colors duration-300">
+        <i id="urgent-icon" class="fa-solid fa-triangle-exclamation text-emerald-600 animate-bounce"></i>
+        <span id="banner-text">⚠️ [간이사업자] 부가가치세 확정신고 마감까지 계산 중...</span>
+    </div>
+
+    <!-- 메인 컨텐츠 영역 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- TAB 1: 대시보드 -->
+        <div id="view-dashboard" class="tab-content space-y-6">
+            
+            <!-- 4단계 실시간 매출 구간 진단 배너 -->
+            <div id="revenueDiagnosticBanner" class="p-5 rounded-2xl shadow-sm border border-emerald-200 bg-emerald-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all">
+                <div class="flex items-start space-x-3">
+                    <div id="diagnosticIcon" class="p-2.5 bg-emerald-600 text-white rounded-xl mt-0.5 shadow-sm">
+                        <i class="fa-solid fa-circle-check text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 id="diagnosticTitle" class="font-bold text-emerald-900 text-base">🟢 [1단계] 연 매출 4,800만 원 미만 예상 (부가가치세 납부의무 전액 면제)</h3>
+                        <p id="diagnosticDesc" class="text-xs text-emerald-700 mt-1 leading-relaxed">현재 예상 총 매출액이 4,800만 원 미만입니다. 부가가치세 신고는 이행해야 하지만 실제 납부할 부가가치세는 0원으로 전액 면제됩니다.</p>
+                        <div class="mt-2 text-xs font-semibold text-slate-600 flex flex-wrap gap-x-4">
+                            <span>현재 총 공급대가: <strong id="diagCurrentRevenue" class="text-emerald-800 font-mono-num">0원</strong></span>
+                            <span>남은 한도: <strong id="diagRemainingRevenue" class="text-emerald-800 font-mono-num">48,000,000원</strong></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-right whitespace-nowrap">
+                    <span id="diagnosticBadge" class="px-3 py-1 bg-emerald-200 text-emerald-900 font-bold text-xs rounded-full shadow-sm">납부면제 구간</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                <!-- 좌측 사이드바 컬럼 (4열) -->
+                <div class="lg:col-span-4 space-y-6">
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-regular fa-calendar-check text-emerald-500 text-lg"></i>
+                                <h2 class="font-bold text-slate-800">세금 신고 일정</h2>
+                            </div>
+                            <span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">연 1회 부가세 / 매월 원천세</span>
+                        </div>
+                        <div id="schedule-list" class="mt-4 space-y-2.5 text-xs"></div>
+                        <button onclick="switchTab('calendar')" class="w-full mt-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition flex items-center justify-center space-x-1">
+                            <span>세무일정 전체 조회</span>
+                            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-list-check text-blue-500 text-lg"></i>
+                                <h2 class="font-bold text-slate-800">간이과세·원천세 제출 서류 점검</h2>
+                            </div>
+                            <span id="checklist-progress" class="text-xs font-bold text-blue-600 font-mono-num">0% 준비완료</span>
+                        </div>
+                        <div id="checklist-items" class="mt-4 space-y-2.5 text-xs"></div>
+                        <button onclick="switchTab('checklist')" class="w-full mt-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl border border-slate-200 transition flex items-center justify-center space-x-1">
+                            <span>체크리스트 상세 관리 이동</span>
+                            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5">
+                        <div class="flex items-center space-x-2 pb-3 border-b border-slate-100">
+                            <i class="fa-solid fa-file-excel text-emerald-600 text-lg"></i>
+                            <h2 class="font-bold text-slate-800">국세청 공식 서식 다운로드</h2>
+                        </div>
+                        <div class="mt-4 space-y-2 text-xs">
+                            <div class="flex justify-between py-1 border-b border-slate-50">
+                                <span class="text-slate-500">총 연간 매출공급대가:</span>
+                                <span id="summary-sales" class="font-bold text-slate-800 font-mono-num">0 원</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-50">
+                                <span class="text-slate-500">매입세액 및 의제공제:</span>
+                                <span id="summary-purchase" class="font-bold text-slate-800 font-mono-num">0 원</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-50">
+                                <span class="text-slate-500">필요경비 총액:</span>
+                                <span id="summary-expense" class="font-bold text-slate-800 font-mono-num">0 원</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-50 bg-emerald-50/50 px-1 rounded">
+                                <span class="text-emerald-800 font-medium">차감 납부할 예상 부가세:</span>
+                                <span id="summary-vat" class="font-bold text-emerald-700 font-mono-num">0 원</span>
+                            </div>
+                            <div class="flex justify-between py-1 bg-indigo-50/50 px-1 rounded">
+                                <span class="text-indigo-700 font-medium">예상 종합소득세(최종):</span>
+                                <span id="summary-tax-val" class="font-bold text-indigo-700 font-mono-num">0 원</span>
+                            </div>
+                        </div>
+                        <button onclick="downloadOfficialTaxXLSX()" class="w-full mt-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-file-excel text-sm"></i>
+                            <span>국세청 공식 3단 시트 세무서식 (.xlsx) 다운로드</span>
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- 우측 메인 콘텐츠 컬럼 (8열) -->
+                <div class="lg:col-span-8 space-y-6">
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="text-xs text-slate-500 font-medium">총 연간 매출(공급대가)</div>
+                            <div id="card-total-sales" class="text-lg font-black text-emerald-600 mt-1 font-mono-num">0 원</div>
+                            <div id="card-sales-count" class="text-[11px] text-slate-400 mt-1 font-mono-num">총 0건</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="text-xs text-slate-500 font-medium">매입세액 및 의제공제</div>
+                            <div id="card-total-purchase" class="text-lg font-black text-blue-600 mt-1 font-mono-num">0 원</div>
+                            <div id="card-purchase-count" class="text-[11px] text-slate-400 mt-1 font-mono-num">총 0건</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="text-xs text-slate-500 font-medium">필요경비 총액</div>
+                            <div id="card-total-expense" class="text-lg font-black text-amber-600 mt-1 font-mono-num">0 원</div>
+                            <div id="card-expense-count" class="text-[11px] text-slate-400 mt-1 font-mono-num">총 0건</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm bg-gradient-to-br from-emerald-50/30 to-white">
+                            <div class="text-xs text-emerald-800 font-bold">최종 예상 납부세액</div>
+                            <div id="card-estimated-tax" class="text-lg font-black text-emerald-700 mt-1 font-mono-num">0 원</div>
+                            <div id="card-tax-breakdown" class="text-[11px] text-emerald-600 mt-1">예정고지/중간예납 차감후</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-file-excel text-emerald-600 text-lg"></i>
+                                <h3 class="font-bold text-slate-800 text-sm">홈택스 세금계산서·계산서 엑셀 일괄 업로드 (품목명 정밀 매칭)</h3>
+                            </div>
+                            <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">품목명 완벽 연동</span>
+                        </div>
+                        
+                        <div ondragover="event.preventDefault()" ondrop="handleExcelDrop(event)" class="border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/20 hover:bg-emerald-50/50 rounded-xl p-6 text-center cursor-pointer transition" onclick="document.getElementById('excel-file-input').click()">
+                            <input type="file" id="excel-file-input" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleExcelUpload(this.files)">
+                            <div class="w-10 h-10 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto mb-2 shadow">
+                                <i class="fa-solid fa-file-excel"></i>
+                            </div>
+                            <p class="text-xs font-bold text-slate-700">홈택스 엑셀 파일 업로드 (클릭 또는 드래그)</p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">작성일자, 공급자 상호, 사업자번호, '품목명' 적요 완벽 인식</p>
+                        </div>
+
+                        <hr class="border-slate-100 my-2">
+
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i>
+                                <h3 class="font-bold text-slate-800 text-sm">Gemini AI 영수증 정밀 인식</h3>
+                            </div>
+                            <span id="parsing-status" class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">API 키 대기중</span>
+                        </div>
+                        <div id="drop-zone" onclick="checkApiKeyBeforeUpload()" ondragover="event.preventDefault()" ondrop="handleFileDrop(event)" class="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/30 hover:bg-blue-50/70 rounded-xl p-6 text-center cursor-pointer transition">
+                            <input type="file" id="file-input" class="hidden" accept="image/*,application/pdf" multiple onchange="handleFileUpload(this.files)">
+                            <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-2 shadow">
+                                <i class="fa-solid fa-receipt"></i>
+                            </div>
+                            <p class="text-xs font-bold text-slate-700">영수증 이미지(PNG, JPG) 및 PDF 파일 업로드하기</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-table text-slate-700"></i>
+                                <h3 class="font-bold text-slate-800 text-sm">최근 매출·지출 내역 요약 (<span class="text-emerald-600 font-bold">간이장부</span>)</h3>
+                            </div>
+                            <button onclick="switchTab('ledger')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center space-x-1.5">
+                                <i class="fa-solid fa-book-open"></i>
+                                <span>장부관리 이동</span>
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto custom-scrollbar">
+                            <table class="w-full text-xs text-left border-collapse">
+                                <thead class="bg-slate-50 text-slate-500 border-y border-slate-200 font-semibold">
+                                    <tr>
+                                        <th class="py-2.5 px-3 w-24">일자</th>
+                                        <th class="py-2.5 px-3 w-28">구분</th>
+                                        <th class="py-2.5 px-3 w-32 whitespace-nowrap">사업자번호</th>
+                                        <th class="py-2.5 px-3 w-36">상호 / 거래처</th>
+                                        <th class="py-2.5 px-3">적요 (상세내용)</th>
+                                        <th class="py-2.5 px-3 text-right w-28">공급대가(합계)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transaction-rows" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: 장부관리 -->
+        <div id="view-ledger" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-200 gap-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-book text-emerald-600"></i>
+                            <span>통합 사업장 장부 관리 센터 (<span class="text-emerald-600 font-bold">신용카드·현금영수증·세금계산서·계산서 세분화</span>)</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">맨 위 초록색 입력 행에서 값 입력 후 엔터나 Tab을 누르면 곧바로 장부에 등록되며 연속 입력이 가능합니다.</p>
+                    </div>
+                    
+                    <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+                        <!-- 📅 기간별 조회 필터 바 -->
+                        <div class="flex items-center space-x-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 flex-wrap gap-y-1">
+                            <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-calendar-days mr-1"></i>기간:</span>
+                            <input type="date" id="filter-start-date" onchange="renderLedgerEditableTable()" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono-num text-slate-700 outline-none">
+                            <span class="text-slate-400">~</span>
+                            <input type="date" id="filter-end-date" onchange="renderLedgerEditableTable()" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono-num text-slate-700 outline-none">
+                            
+                            <div class="flex items-center space-x-1 ml-1 pl-2 border-l border-slate-200">
+                                <button onclick="setPeriodFilter('all')" class="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 rounded text-[11px] font-semibold text-slate-700">전체</button>
+                                <button onclick="setPeriodFilter('this_month')" class="px-1.5 py-0.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded text-[11px] font-semibold">이번달</button>
+                                <button onclick="setPeriodFilter('q1')" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-[11px] font-semibold text-slate-700">1기예정</button>
+                                <button onclick="setPeriodFilter('q2')" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-[11px] font-semibold text-slate-700">1기확정</button>
+                                <button onclick="setPeriodFilter('q3')" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-[11px] font-semibold text-slate-700">2기예정</button>
+                                <button onclick="setPeriodFilter('q4')" class="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-[11px] font-semibold text-slate-700">2기확정</button>
+                            </div>
+                        </div>
+
+                        <select id="ledger-sort-order" onchange="changeSortOrder(this.value)" class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 outline-none cursor-pointer">
+                            <option value="desc" selected>날짜 내림차순 (최신순)</option>
+                            <option value="asc">날짜 오름차순 (과거순)</option>
+                        </select>
+                        <button onclick="deleteSelectedTransactions()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center space-x-1">
+                            <i class="fa-solid fa-trash-can"></i>
+                            <span>선택 삭제</span>
+                        </button>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+                            <input type="text" id="ledger-search-input" onkeyup="filterLedgerTable()" placeholder="거래처, 적요 검색..." class="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 w-44">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🛠 일괄 수정 바 (구분 및 계정과목 일괄 변경) -->
+                <div class="bg-emerald-50/70 border border-emerald-200 p-3.5 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div class="flex items-center space-x-2 font-bold text-emerald-900">
+                        <i class="fa-solid fa-wand-magic-sparkles text-emerald-600"></i>
+                        <span>다중 선택 일괄 수정 도구:</span>
+                    </div>
+                    <div class="flex items-center space-x-3 flex-wrap gap-y-2">
+                        <div class="flex items-center space-x-1">
+                            <span class="text-slate-600">구분 변경:</span>
+                            <select id="bulk-type-select" class="p-1.5 bg-white border border-slate-300 rounded-lg font-semibold text-xs outline-none">
+                                <option value="매출(신용카드)">매출(신용카드)</option>
+                                <option value="매출(현금영수증)">매출(현금영수증)</option>
+                                <option value="매출(세금계산서)">매출(세금계산서)</option>
+                                <option value="매출(계산서_면세)">매출(계산서_면세)</option>
+                                <option value="매출(기타현금)">매출(기타현금)</option>
+                                <option value="매입(세금계산서)">매입(세금계산서)</option>
+                                <option value="매입(계산서_면세)">매입(계산서_면세)</option>
+                                <option value="매입(신용카드)">매입(신용카드)</option>
+                                <option value="매입(현금영수증)">매입(현금영수증)</option>
+                                <option value="매입(면세농산물_의제매입)">매입(면세농산물_의제매입)</option>
+                                <option value="일반지출(간이영수증)">일반지출(간이영수증)</option>
+                                <option value="일반지출(인건비/급여)">일반지출(인건비/급여)</option>
+                            </select>
+                            <button onclick="bulkUpdateType()" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow transition">구분 일괄적용</button>
+                        </div>
+                        <div class="flex items-center space-x-1 border-l pl-3 border-emerald-200">
+                            <span class="text-slate-600">계정과목 변경:</span>
+                            <select id="bulk-account-select" class="p-1.5 bg-white border border-slate-300 rounded-lg font-semibold text-xs outline-none">
+                                <optgroup label="매출 과목">
+                                    <option value="배달/플랫폼매출">배달/플랫폼매출</option>
+                                    <option value="상품매출">상품매출</option>
+                                    <option value="제품매출">제품매출</option>
+                                    <option value="기타잡이익">기타잡이익</option>
+                                </optgroup>
+                                <optgroup label="비용/매입 과목">
+                                    <option value="상품/원재료비" selected>상품/원재료비</option>
+                                    <option value="인건비">인건비</option>
+                                    <option value="임차료">임차료</option>
+                                    <option value="복리후생비">복리후생비</option>
+                                    <option value="소모품비">소모품비</option>
+                                    <option value="수도광열비">수도광열비</option>
+                                    <option value="통신비">통신비</option>
+                                    <option value="수수료비용">수수료비용</option>
+                                    <option value="접대비">접대비</option>
+                                    <option value="세금과공과">세금과공과</option>
+                                </optgroup>
+                            </select>
+                            <button onclick="bulkUpdateAccount()" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition">계정 일괄적용</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar min-h-[380px]">
+                    <table class="w-full text-xs text-left border-collapse min-w-[950px]" id="ledger-table">
+                        <thead class="bg-slate-50 text-slate-500 border-y border-slate-200 font-semibold">
+                            <tr>
+                                <th class="py-3 px-2 w-10 text-center"><input type="checkbox" id="select-all-ledger" onclick="toggleSelectAll(this)" class="rounded text-blue-600"></th>
+                                <th class="py-3 px-3 w-28">일자</th>
+                                <th class="py-3 px-3 w-56">구분 (세분화된 증빙)</th>
+                                <th class="py-3 px-3 w-36">사업자번호</th>
+                                <th class="py-3 px-3 min-w-[140px]">상호 / 거래처</th>
+                                <th class="py-3 px-3 min-w-[140px]">적요</th>
+                                <th class="py-3 px-3 w-36">계정과목</th>
+                                <th class="py-3 px-3 text-right w-28">공급가액</th>
+                                <th class="py-3 px-3 text-right w-24">부가세</th>
+                                <th class="py-3 px-3 text-right w-28">공급대가(합계)</th>
+                                <th class="py-3 px-2 text-center w-14">삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody id="full-ledger-rows" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: 대표자 인출/투입금 관리 -->
+        <div id="view-ownerfund" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-200 gap-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-wallet text-amber-600"></i>
+                            <span>대표자 자금 이동 관리 (인출금 / 사업주 투입금)</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">개인사업자 통장과 대표자 개인 통장 간의 자금 이동 내역입니다. 세금 계산 시 비용 및 매출에서 자동 제외됩니다.</p>
+                    </div>
+                    <button onclick="openOwnerFundModal()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>+ 자금 인출/투입 등록</span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-xs text-left border-collapse">
+                        <thead class="bg-slate-50 text-slate-500 border-y border-slate-200 font-semibold">
+                            <tr>
+                                <th class="py-3 px-4 w-32">날짜</th>
+                                <th class="py-3 px-4 w-40">자금 구분</th>
+                                <th class="py-3 px-4">사유 및 상세 적요</th>
+                                <th class="py-3 px-4 text-right w-40">금액</th>
+                                <th class="py-3 px-4 text-center w-20">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="owner-fund-table-body" class="divide-y divide-slate-100 text-slate-700">
+                            <tr><td colspan="5" class="py-8 text-center text-slate-400">등록된 대표자 자금 이동 내역이 없습니다.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: 세무일정 조회 및 캘린더 -->
+        <div id="view-calendar" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-calendar-days text-emerald-600"></i>
+                            <span>월별 세무 일정 및 개인 메모 캘린더</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">날짜를 클릭하거나 우측 상단 버튼으로 개인 메모를 추가 및 관리할 수 있습니다.</p>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                        <button onclick="changeMonth(-1)" class="px-3 py-1.5 hover:bg-white rounded-lg shadow-sm">&lt; 이전달</button>
+                        <span id="calendar-month-year" class="px-4 text-slate-800 font-extrabold text-sm">2026년 10월</span>
+                        <button onclick="changeMonth(1)" class="px-3 py-1.5 hover:bg-white rounded-lg shadow-sm">다음달 &gt;</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-5 space-y-4">
+                        <div class="flex justify-between items-center">
+                            <h3 class="font-bold text-slate-800 text-xs">📅 미니 캘린더</h3>
+                            <button onclick="openNoteModal()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg shadow transition">+ 일정메모 추가</button>
+                        </div>
+                        <div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-200 text-xs">
+                            <div class="grid grid-cols-7 gap-px bg-slate-200 font-bold text-center">
+                                <div class="bg-slate-100 py-1.5 text-red-500">일</div>
+                                <div class="bg-slate-100 py-1.5">월</div>
+                                <div class="bg-slate-100 py-1.5">화</div>
+                                <div class="bg-slate-100 py-1.5">수</div>
+                                <div class="bg-slate-100 py-1.5">목</div>
+                                <div class="bg-slate-100 py-1.5">금</div>
+                                <div class="bg-slate-100 py-1.5 text-blue-600">토</div>
+                            </div>
+                            <div id="calendar-grid" class="grid grid-cols-7 gap-px bg-slate-200"></div>
+                        </div>
+                    </div>
+
+                    <div class="lg:col-span-7 space-y-4">
+                        <h3 class="font-bold text-slate-800 text-xs">📌 월별 필수 세무 일정 및 등록한 개인 메모</h3>
+                        <div id="master-tax-schedule-list" class="space-y-3 text-xs max-h-[520px] overflow-y-auto custom-scrollbar pr-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: 홈택스 엑셀 & 증빙 수집함 -->
+        <div id="view-collect" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-200 gap-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-file-arrow-up text-blue-600"></i>
+                            <span>홈택스 엑셀 업로드 및 증빙 전체 수집함</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">홈택스 세금계산서 엑셀 및 AI 수집 증빙의 전체 내역입니다.</p>
+                    </div>
+                    <button onclick="document.getElementById('excel-file-input-collect').click()" class="px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl shadow">홈택스 엑셀 업로드</button>
+                    <input type="file" id="excel-file-input-collect" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleExcelUpload(this.files)">
+                </div>
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-xs text-left border-collapse">
+                        <thead class="bg-slate-50 text-slate-500 border-y border-slate-200 font-semibold">
+                            <tr>
+                                <th class="py-3 px-3">일자</th>
+                                <th class="py-3 px-3">구분</th>
+                                <th class="py-3 px-3">사업자번호</th>
+                                <th class="py-3 px-3">상호 / 거래처</th>
+                                <th class="py-3 px-3">적요</th>
+                                <th class="py-3 px-3">계정과목</th>
+                                <th class="py-3 px-3 text-right">공급가액</th>
+                                <th class="py-3 px-3 text-right">부가세</th>
+                                <th class="py-3 px-3 text-right">합계금액</th>
+                            </tr>
+                        </thead>
+                        <tbody id="collect-table-rows" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 6: 예상 세금 세분화 상세 계산 (신고서식 고도화) -->
+        <div id="view-taxcalc" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+                <div>
+                    <h2 class="text-base font-bold text-slate-800 flex items-center space-x-2">
+                        <i class="fa-solid fa-coins text-emerald-600"></i>
+                        <span>간이사업자 세무 세분화 상세 산출 및 홈택스 신고서식 보고서</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">부가가치세 및 종합소득세의 세부 증빙별 매출·매입 산출 과정과 기납부액 차감 내역을 투명하게 확인하세요.</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    <!-- 좌측: 부가가치세 상세 세분화 산출표 -->
+                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-4">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                            <h3 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+                                <span>1. 부가가치세 세부 증빙별 산출표</span>
+                            </h3>
+                            <span class="text-xs font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">간이과세자</span>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden text-xs space-y-3 p-3 font-mono-num">
+                            <div class="font-bold text-emerald-900 border-b pb-1 font-sans flex justify-between">
+                                <span>① 매출처별 명세 (증빙별 극세화)</span>
+                                <span class="text-[11px] text-slate-500 font-normal">공급대가 기준</span>
+                            </div>
+                            <div id="vat-calc-sales-detail" class="space-y-1"></div>
+
+                            <div class="font-bold text-emerald-900 border-b pb-1 pt-2 font-sans">② 과세표준 및 간이산출세액</div>
+                            <div class="flex justify-between font-sans"><span>• 총 과세공급대가 합계:</span><span id="vat-calc-total-sales" class="font-bold">0 원</span></div>
+                            <div class="flex justify-between font-sans"><span>• 업종별 부가가치율:</span><span id="vat-calc-rate" class="font-bold text-emerald-600">15%</span></div>
+                            <div class="flex justify-between font-bold bg-emerald-50/60 p-1.5 rounded font-sans"><span>= 과세표준 (공급대가 × 율):</span><span id="vat-calc-taxbase">0 원</span></div>
+                            <div class="flex justify-between font-sans"><span>• 간이산출세액 (과세표준 × 10%):</span><span id="vat-calc-rawvat" class="font-bold text-emerald-700">0 원</span></div>
+
+                            <div class="font-bold text-blue-900 border-b pb-1 pt-2 font-sans flex justify-between">
+                                <span>③ 매입처별 공제 및 의제매입세액 명세</span>
+                                <span class="text-[11px] text-slate-500 font-normal">공제 세액</span>
+                            </div>
+                            <div id="vat-calc-purchase-detail" class="space-y-1"></div>
+
+                            <div class="font-bold text-teal-900 border-b pb-1 pt-2 font-sans flex justify-between">
+                                <span>④ 신용카드 매출전표 등 발행세액공제</span>
+                                <span class="text-[11px] text-teal-700 font-normal">발행액의 1.3%</span>
+                            </div>
+                            <div class="flex justify-between font-sans text-teal-800 pl-2">
+                                <span>• 카드/현금영수증 발행공제 (연 1천만 한도):</span>
+                                <span id="vat-calc-card-deduct" class="font-bold">- 0 원</span>
+                            </div>
+
+                            <div class="font-bold text-purple-900 border-b pb-1 pt-2 font-sans">⑤ 예정고지 기납부세액 차감</div>
+                            <div class="flex justify-between font-sans text-purple-700 pl-2"><span>• 부가가치세 예정고지 납부액:</span><span id="vat-calc-prepaid-display" class="font-bold">- 0 원</span></div>
+                        </div>
+
+                        <div class="bg-emerald-800 text-white p-4 rounded-xl space-y-1.5 shadow-sm">
+                            <div class="flex justify-between items-center text-xs font-medium text-emerald-200">
+                                <span>연 4,800만원 미만 납부면제 판정</span>
+                                <span id="calc-exemption-tag" class="px-2 py-0.5 bg-emerald-400 text-navy-900 font-bold text-[10px] rounded-full">판정 중</span>
+                            </div>
+                            <div class="flex justify-between items-center pt-1.5 border-t border-emerald-700">
+                                <span class="font-bold text-sm">최종 차감 납부할 부가가치세:</span>
+                                <span id="calc-final-vat" class="text-xl font-black text-amber-300 font-mono-num">0 원</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 우측: 종합소득세 상세 산출표 -->
+                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-4">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                            <h3 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+                                <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+                                <span>2. 종합소득세 세부 산출표 (계정과목 확장)</span>
+                            </h3>
+                            <span class="text-xs font-semibold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">6%~45% 누진</span>
+                        </div>
+                        
+                        <div class="space-y-3 text-xs text-slate-700">
+                            <div class="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
+                                <div class="font-bold text-slate-800 border-b pb-1">① 총수입금액 (매출 합계)</div>
+                                <div class="flex justify-between font-medium"><span>사업소득 총수입금액:</span><span id="calc-dtl-total-rev" class="font-mono-num font-bold text-slate-900">0 원</span></div>
+                            </div>
+
+                            <div class="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
+                                <div class="font-bold text-slate-800 flex justify-between items-center pb-1.5 border-b border-slate-100">
+                                    <span>② 필요경비 세부내역 (전체 계정과목 표준 집계)</span>
+                                </div>
+                                <div id="account-expense-breakdown" class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1 font-mono-num"></div>
+                                <div class="flex justify-between pt-2 border-t font-bold text-red-600"><span>필요경비 총액 합계:</span><span id="calc-dtl-total-exp" class="font-mono-num">- 0 원</span></div>
+                            </div>
+
+                            <div class="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2 font-mono-num">
+                                <div class="font-bold text-slate-800 border-b pb-1 font-sans">③ 소득금액 및 과세표준 산출</div>
+                                <div class="flex justify-between"><span>소득금액 (수입 - 경비):</span><span id="calc-dtl-income" class="font-bold text-slate-900">0 원</span></div>
+                                <div class="flex justify-between"><span>종합소득공제 (기본공제 등):</span><span>- 1,500,000 원</span></div>
+                                <div class="flex justify-between pt-2 border-t font-bold text-indigo-700 text-sm font-sans"><span>[과세표준] 최종 과세표준:</span><span id="calc-dtl-taxbase" class="font-black">0 원</span></div>
+                            </div>
+
+                            <div class="bg-indigo-900 text-white p-4 rounded-xl space-y-1.5 shadow-md font-mono-num">
+                                <div class="flex justify-between text-xs font-medium text-indigo-200"><span>산출세액 (누진세율 적용)</span><span id="calc-dtl-est-raw">0 원</span></div>
+                                <div class="flex justify-between text-xs font-medium text-indigo-300"><span>중간예납 기납부세액 차감</span><span id="calc-dtl-prepaid-display">- 0 원</span></div>
+                                <div class="flex justify-between items-center pt-1.5 border-t border-indigo-700 font-sans"><span class="font-bold text-sm">최종 납부할 예상 소득세:</span><span id="calc-dtl-final-tax" class="text-lg font-black text-amber-300 font-mono-num">0 원</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 7: 체크리스트 상세 관리 -->
+        <div id="view-checklist" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-200 mb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800">간이과세자 종합소득세·부가세·원천세 필수 제출 서류 점검 리스트</h2>
+                        <p class="text-xs text-slate-500 mt-1">세무사 제출 및 홈택스 신고 전 필요 서류 구비 현황을 실시간 체크하세요.</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-slate-500 font-medium">전체 준비 진행률</span>
+                        <div id="checklist-detail-progress" class="text-lg font-black text-blue-600 font-mono-num">0% (0 / 0)</div>
+                    </div>
+                </div>
+                <div id="detailed-checklist" class="space-y-3 text-xs"></div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 하단 푸터 -->
+    <footer class="bg-navy-900 text-slate-400 text-xs py-5 text-center border-t border-slate-800 mt-auto space-y-1">
+        <p>© 2026 <strong>얌의 세무노트</strong>. All rights reserved.</p>
+        <p class="text-[11px] text-slate-500">Designed with Smart Tax & Ledger Manager Pro</p>
+    </footer>
+
+    <!-- 모달 창: 초기화 방식 선택 팝업 -->
+    <div id="reset-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="font-bold text-sm text-slate-800 flex items-center space-x-2">
+                    <i class="fa-solid fa-rotate-ccw text-rose-600"></i>
+                    <span>데이터 초기화 옵션 선택</span>
+                </h3>
+                <button onclick="closeResetModal()" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-600 leading-relaxed">
+                <p>어떤 방식으로 초기화를 진행하시겠습니까?</p>
+                <div class="space-y-2 pt-1">
+                    <button onclick="executeReset(true)" class="w-full text-left p-3 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-emerald-900 text-sm">✨ 기본 샘플 데이터 유지하며 초기화</div>
+                            <div class="text-[11px] text-emerald-700 mt-0.5">처음 실행할 때 제공되는 예시 장부 4건을 남겨두고 나머지만 리셋합니다.</div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-emerald-700"></i>
+                    </button>
+                    <button onclick="executeReset(false)" class="w-full text-left p-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 transition flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-rose-900 text-sm">🗑️ 완전 빈 상태로 초기화</div>
+                            <div class="text-[11px] text-rose-700 mt-0.5">모든 장부 및 자금 이동 내역을 완전히 비웁니다.</div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-rose-700"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="flex justify-end pt-2">
+                <button onclick="closeResetModal()" class="px-4 py-1.5 bg-slate-100 text-xs rounded-lg">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달 창 1: API 키 설정 모달 -->
+    <div id="api-key-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="font-bold text-sm text-slate-800 flex items-center space-x-2">
+                    <i class="fa-solid fa-key text-blue-600"></i>
+                    <span>개인 Gemini API 키 설정 (BYOK)</span>
+                </h3>
+                <button onclick="closeApiKeyModal()" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+            </div>
+            <div class="space-y-3 text-xs text-slate-600">
+                <p>영수증 정밀 AI 비전 인식을 위해 본인의 <strong>Gemini API 키</strong>를 입력해주세요.</p>
+                <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 space-y-1 text-blue-900">
+                    <p>💡 브라우저 로컬 저장소에 안전하게 저장됩니다.</p>
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 font-bold underline inline-block mt-1">👉 무료 Gemini API 키 발급받기</a>
+                </div>
+                <div>
+                    <label class="block font-medium text-slate-700 mb-1">Gemini API 키 입력</label>
+                    <input type="password" id="api-key-input" placeholder="AIzaSy..." class="w-full p-2.5 border rounded-lg font-mono-num text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeApiKeyModal()" class="px-3 py-1.5 bg-slate-100 text-xs rounded-lg">취소</button>
+                <button onclick="saveApiKey()" class="px-4 py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg shadow">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달 창 2: 캘린더 메모 작성/수정 모달 -->
+    <div id="note-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="note-modal-title" class="font-bold text-sm text-slate-800">📅 세무 일정 메모 작성</h3>
+                <button onclick="closeNoteModal()" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <input type="hidden" id="note-edit-id">
+            <div class="space-y-3 text-xs">
+                <div><label class="block font-medium text-slate-600 mb-1">날짜</label><input type="date" id="note-date" class="w-full p-2 border rounded-lg font-mono-num"></div>
+                <div><label class="block font-medium text-slate-600 mb-1">메모 제목</label><input type="text" id="note-title" placeholder="예: 원천세 납부" class="w-full p-2 border rounded-lg"></div>
+                <div><label class="block font-medium text-slate-600 mb-1">상세 내용</label><textarea id="note-desc" rows="3" class="w-full p-2 border rounded-lg"></textarea></div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeNoteModal()" class="px-3 py-1.5 bg-slate-100 text-xs rounded-lg">취소</button>
+                <button onclick="saveNote()" class="px-4 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg shadow">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달 창 3: AI 영수증 분석 결과 확인 팝업 모달 -->
+    <div id="ai-result-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <div class="flex items-center space-x-2 text-emerald-600 font-bold text-sm">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Gemini AI 영수증 분석 결과 확인</span>
+                </div>
+                <button onclick="closeAiResultModal()" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+            </div>
+            <p class="text-xs text-slate-500">AI 분석을 통해 추출된 거래 내역입니다. 내용을 확인하신 후 장부에 반영해 주세요.</p>
+            <div id="ai-result-details" class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs"></div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeAiResultModal()" class="px-4 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-200 transition">닫기</button>
+                <button onclick="confirmAiResultToLedger()" class="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl shadow hover:bg-emerald-700 transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-check"></i>
+                    <span>장부에 승인 및 등록</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달 창 4: 대표자 인출/투입금 등록 모달 -->
+    <div id="owner-fund-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="font-bold text-sm text-slate-800">⚖️ 대표자 자금 이동 등록 (인출/투입)</h3>
+                <button onclick="closeOwnerFundModal()" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+            </div>
+            <form onsubmit="handleSaveOwnerFund(event)" class="space-y-3 text-xs">
+                <div><label class="block font-medium text-slate-600 mb-1">날짜</label><input type="date" id="of-date" required class="w-full p-2.5 border rounded-lg font-mono-num"></div>
+                <div>
+                    <label class="block font-medium text-slate-600 mb-1">자금 이동 구분</label>
+                    <select id="of-category" class="w-full p-2.5 border rounded-lg font-bold">
+                        <option value="대표자 인출금">대표자 인출금 (가게 통장 ➡️ 대표자 개인)</option>
+                        <option value="사업주 투입금">사업주 투입금 (대표자 개인 ➡️ 가게 통장)</option>
+                    </select>
+                </div>
+                <div><label class="block font-medium text-slate-600 mb-1">금액 (원)</label><input type="text" id="of-amount" placeholder="0" required class="w-full p-2.5 border rounded-lg font-mono-num font-bold" oninput="formatInputValue(this)" onkeydown="handlePlusShortcut(event)"></div>
+                <div><label class="block font-medium text-slate-600 mb-1">사유 및 상세 적요</label><input type="text" id="of-memo" placeholder="예: 개인 생활비 인출" required class="w-full p-2.5 border rounded-lg"></div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" onclick="closeOwnerFundModal()" class="px-3 py-1.5 bg-slate-100 text-xs rounded-lg">취소</button>
+                    <button type="submit" class="px-4 py-1.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow">저장하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 모달 창 5: 예정고지 / 중간예납 등록 모달 -->
+    <div id="prepaid-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm p-6 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="prepaid-modal-title" class="font-bold text-sm text-slate-800">예정 납부액 등록</h3>
+                <button onclick="closePrepaidModal()" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+            </div>
+            <input type="hidden" id="prepaid-type">
+            <div class="space-y-3 text-xs">
+                <div><label class="block font-medium text-slate-600 mb-1">납부 일자</label><input type="date" id="prepaid-date" class="w-full p-2.5 border rounded-lg font-mono-num"></div>
+                <div><label class="block font-medium text-slate-600 mb-1">납부 금액 (원)</label><input type="text" id="prepaid-amount" placeholder="0" class="w-full p-2.5 border rounded-lg font-mono-num font-bold" oninput="formatInputValue(this)" onkeydown="handlePlusShortcut(event)"></div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closePrepaidModal()" class="px-3 py-1.5 bg-slate-100 text-xs rounded-lg">취소</button>
+                <button onclick="savePrepaidAmount()" class="px-4 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg shadow">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 🛡️ 소스 코드 및 화면 보호 보안 스크립트 적용
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault(); // 우클릭 방지
+        });
+
+        document.addEventListener('selectstart', function(e) {
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault(); // 본문 드래그 및 텍스트 선택 방지
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            // F12, Ctrl+U (소스보기), Ctrl+Shift+I / J (개발자도구), Ctrl+S (저장) 차단
+            if (
+                e.key === 'F12' || 
+                (e.ctrlKey && e.key.toLowerCase() === 'u') ||
+                (e.ctrlKey && e.shiftKey && (e.key.toLowerCase() === 'i' || e.key.toLowerCase() === 'j' || e.key.toLowerCase() === 'c')) ||
+                (e.ctrlKey && e.key.toLowerCase() === 's')
+            ) {
+                e.preventDefault();
+                alert('⚠️ 보안 정책에 따라 해당 기능 및 단축키는 사용할 수 없습니다.');
+                return false;
+            }
+        });
+
+        let userApiKey = localStorage.getItem('gemini_user_api_key') || '';
+        let currentVatRate = 0.15;
+        let calendarYear = 2026;
+        let calendarMonth = 9; // 10월 (0-indexed)
+        let currentSortOrder = 'desc'; 
+        let pendingAiData = null;
+
+        const defaultSampleTransactions = [
+            { id: 1, date: '2026-08-10', type: '매출(신용카드)', bizNo: '333-44-55555', vendor: '배달의민족 정산', memo: '8월 1차 배달 정산금', account: '배달/플랫폼매출', amount: 3500000, vat: 0 },
+            { id: 2, date: '2026-08-15', type: '매입(세금계산서)', bizNo: '222-11-00000', vendor: '식자재유통', memo: '커피 원두 및 식자재 구입', account: '상품/원재료비', amount: 1000000, vat: 100000 },
+            { id: 3, date: '2026-08-20', type: '매입(면세농산물_의제매입)', bizNo: '111-88-99999', vendor: '가락시장 농산물', memo: '야채 및 식자재 면세 구입', account: '상품/원재료비', amount: 2000000, vat: 0 },
+            { id: 4, date: '2026-09-01', type: '일반지출(간이영수증)', bizNo: '111-22-33333', vendor: '한국전력', memo: '8월분 사업장 전기요금', account: '수도광열비', amount: 300000, vat: 0 }
+        ];
+
+        let transactions = JSON.parse(localStorage.getItem('simp_ledger_data')) || JSON.parse(JSON.stringify(defaultSampleTransactions));
+        let ownerFundData = JSON.parse(localStorage.getItem('simp_owner_fund')) || [];
+        let prepaidData = JSON.parse(localStorage.getItem('simp_prepaid')) || { vat: { date: '2026-07-25', amount: 0 }, income: { date: '2026-11-30', amount: 0 } };
+
+        const salesAccounts = ['상품매출', '제품매출', '배달/플랫폼매출', '기타잡이익'];
+        const expenseAccounts = [
+            '상품/원재료비', '인건비', '임차료', '복리후생비', '소모품비', 
+            '수도광열비', '통신비', '수수료비용', '여비교통비', '접대비', 
+            '세금과공과', '보험료', '차량유지비', '광고선전비'
+        ];
+
+        let checklistItems = JSON.parse(localStorage.getItem('simp_checklist_items')) || [
+            { id: 'ind_1', group: '📌 부가가치세 필수 증빙 및 신고서식', text: '매출·매입 전자세금계산서 및 전자계산서 합계표 확인', checked: true },
+            { id: 'ind_2', group: '📌 부가가치세 필수 증빙 및 신고서식', text: '사업용 신용카드 사용내역 및 현금영수증(매입자) 공제 내역 확인', checked: true },
+            { id: 'ind_3', group: '📌 부가가치세 필수 증빙 및 신고서식', text: '면세 식자재 농수산물 매입 증빙 (의제매입세액 공제 8/108 반영)', checked: true },
+            { id: 'ind_4', group: '📌 부가가치세 필수 증빙 및 신고서식', text: '신용카드발행세액공제 대상 매출 건수 및 금액 정산 확인 (1.3%)', checked: false },
+            { id: 'pay_1', group: '💼 인건비 원천세 및 4대보험 신고', text: '매월 10일 직원·알바 원천세 신고 및 납부 영수증 구비', checked: true },
+            { id: 'pay_2', group: '💼 인건비 원천세 및 4대보험 신고', text: '반기별 간이지급명세서 (근로소득/사업소득 3.3%) 제출 완료', checked: false },
+            { id: 'pay_3', group: '💼 인건비 원천세 및 4대보험 신고', text: '일용근로소득 지급명세서 매분기 제출 내역 확인', checked: false },
+            { id: 'exp_1', group: '📋 종합소득세 및 필요경비 증빙 (장부 관리)', text: '사업장 임대료 세금계산서 또는 월세 현금영수증 수취 확인', checked: true },
+            { id: 'exp_2', group: '📋 종합소득세 및 필요경비 증빙 (장부 관리)', text: '전기요금·수도요금·가스요금 사업자 번호 등록 및 지출 증빙', checked: true },
+            { id: 'exp_3', group: '📋 종합소득세 및 필요경비 증빙 (장부 관리)', text: '배달 플랫폼 수수료 및 정산 내역서 보관', checked: true },
+            { id: 'exp_4', group: '📋 종합소득세 및 필요경비 증빙 (장부 관리)', text: '경조사비 증빙 보관 (청첩장·부고장·문자 캡처 등, 건당 20만 원 한도)', checked: false },
+            { id: 'exp_5', group: '📋 종합소득세 및 필요경비 증빙 (장부 관리)', text: '접대비 관련 신용카드 영수증 및 세금계산서 적격증빙 구비', checked: false }
+        ];
+
+        let customNotes = JSON.parse(localStorage.getItem('simp_custom_notes')) || [
+            { id: 1, date: '2026-10-10', title: '원천세 납부 완료', desc: '9월분 급여 원천세 납부' },
+            { id: 2, date: '2026-10-25', title: '부가세 예정고지 수령', desc: '고지서 금액 확인' }
+        ];
+
+        function formatNumber(num) { return (num || 0).toLocaleString(); }
+        
+        function autoFormatRegistrationNo(inputEl) {
+            let val = inputEl.value.replace(/[^0-9]/g, '');
+            if (val.length <= 10) {
+                if (val.length > 5) val = val.slice(0, 3) + '-' + val.slice(3, 5) + '-' + val.slice(5, 10);
+                else if (val.length > 3) val = val.slice(0, 3) + '-' + val.slice(3, 5);
+            } else val = val.slice(0, 6) + '-' + val.slice(6, 13);
+            inputEl.value = val;
+        }
+
+        function calculateDday(targetDateStr) {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const target = new Date(targetDateStr); target.setHours(0,0,0,0);
+            const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+            return diff;
+        }
+
+        function updateUrgentBanner() {
+            const dday = calculateDday('2027-01-25');
+            const banner = document.getElementById('banner-text');
+            if(banner) {
+                if(dday >= 0) banner.innerHTML = `⚠️ [간이사업자] 부가가치세 확정신고 마감까지 <span class="text-red-600 font-extrabold">D-${dday}일</span> 남았습니다 (2027년 1월 25일)`;
+                else banner.innerHTML = `⚠️ [간이사업자] 부가가치세 확정신고 마감일이 지났습니다.`;
+            }
+        }
+
+        function changeVatRate(rate) { currentVatRate = parseFloat(rate); recalculateSummary(); }
+        function changeSortOrder(order) { currentSortOrder = order; renderLedgerEditableTable(); }
+
+        function checkApiKeyStatus() {
+            const btnText = document.getElementById('api-key-btn-text');
+            const statusEl = document.getElementById('parsing-status');
+            if(userApiKey) { btnText.innerText = 'API 키 완료 ✅'; if(statusEl) statusEl.innerText = 'Gemini AI 준비완료'; }
+            else { btnText.innerText = 'API 키 필요 ⚠️'; if(statusEl) statusEl.innerText = 'API 키 미등록'; }
+        }
+
+        function openApiKeyModal() { document.getElementById('api-key-input').value = userApiKey; document.getElementById('api-key-modal').classList.remove('hidden'); }
+        function closeApiKeyModal() { document.getElementById('api-key-modal').classList.add('hidden'); }
+        function saveApiKey() {
+            userApiKey = document.getElementById('api-key-input').value.trim();
+            localStorage.setItem('gemini_user_api_key', userApiKey);
+            closeApiKeyModal(); checkApiKeyStatus(); alert('✨ Gemini API 키가 저장되었습니다!');
+        }
+
+        function checkApiKeyBeforeUpload() {
+            if(!userApiKey) { alert('⚠️ API 키를 먼저 등록해주세요.'); openApiKeyModal(); return; }
+            document.getElementById('file-input').click();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('view-' + tabId).classList.remove('hidden');
+            document.getElementById('tab-' + tabId).classList.add('active');
+            if(tabId === 'calendar') { renderCalendar(); renderMasterScheduleList(); }
+            if(tabId === 'checklist') { renderChecklist(); }
+            if(tabId === 'ledger') { 
+                if(!document.getElementById('filter-start-date').value) {
+                    setPeriodFilter('this_month');
+                } else {
+                    renderLedgerEditableTable(); 
+                }
+            }
+            if(tabId === 'ownerfund') { renderOwnerFundTable(); }
+            if(tabId === 'taxcalc') { updateDetailedTaxCalculation(); }
+            if(tabId === 'collect') { renderCollectTable(); }
+        }
+
+        function saveAllDataToStorage() {
+            localStorage.setItem('simp_ledger_data', JSON.stringify(transactions));
+            localStorage.setItem('simp_owner_fund', JSON.stringify(ownerFundData));
+            localStorage.setItem('simp_prepaid', JSON.stringify(prepaidData));
+            localStorage.setItem('simp_custom_notes', JSON.stringify(customNotes));
+            localStorage.setItem('simp_checklist_items', JSON.stringify(checklistItems));
+        }
+
+        function exportDataJSON() {
+            const backupObj = { transactions, ownerFundData, prepaidData, customNotes, checklistItems };
+            const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url;
+            a.download = `얌의세무노트_간이과세자_백업_${new Date().toISOString().substring(0,10)}.json`;
+            a.click();
+        }
+
+        function importDataJSON(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const parsed = JSON.parse(evt.target.result);
+                    if(parsed.transactions) transactions = parsed.transactions;
+                    if(parsed.ownerFundData) ownerFundData = parsed.ownerFundData;
+                    if(parsed.prepaidData) prepaidData = parsed.prepaidData;
+                    if(parsed.customNotes) customNotes = parsed.customNotes;
+                    if(parsed.checklistItems) checklistItems = parsed.checklistItems;
+                    saveAllDataToStorage(); recalculateSummary(); renderChecklist();
+                    alert('✨ 백업 데이터 복원이 성공적으로 완료되었습니다!');
+                } catch(err) { alert('⚠️ 올바르지 않은 백업 파일 형식입니다.'); }
+            };
+            reader.readAsText(file);
+        }
+
+        function openResetModal() { document.getElementById('reset-modal').classList.remove('hidden'); }
+        function closeResetModal() { document.getElementById('reset-modal').classList.add('hidden'); }
+        
+        function executeReset(keepSample) {
+            closeResetModal();
+            localStorage.clear();
+            ownerFundData = [];
+            customNotes = [
+                { id: 1, date: '2026-10-10', title: '원천세 납부 완료', desc: '9월분 급여 원천세 납부' },
+                { id: 2, date: '2026-10-25', title: '부가세 예정고지 수령', desc: '고지서 금액 확인' }
+            ];
+            prepaidData = { vat: { date: '2026-07-25', amount: 0 }, income: { date: '2026-11-30', amount: 0 } };
+            
+            if (keepSample) {
+                transactions = JSON.parse(JSON.stringify(defaultSampleTransactions));
+                alert('✨ 기본 샘플 데이터를 유지한 상태로 초기화되었습니다!');
+            } else {
+                transactions = [];
+                alert('🗑️ 모든 데이터가 완전히 초기화되었습니다.');
+            }
+            saveAllDataToStorage();
+            recalculateSummary();
+            renderChecklist();
+            if(!document.getElementById('view-ledger').classList.contains('hidden')) renderLedgerEditableTable();
+        }
+
+        function renderChecklist() {
+            const listCard = document.getElementById('checklist-items');
+            const listDetail = document.getElementById('detailed-checklist');
+            const totalCount = checklistItems.length;
+            const checkedCount = checklistItems.filter(i => i.checked).length;
+            const percentage = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
+
+            document.getElementById('checklist-progress').innerText = `${percentage}% 준비완료 (${checkedCount}/${totalCount})`;
+            const detailProgEl = document.getElementById('checklist-detail-progress');
+            if(detailProgEl) detailProgEl.innerText = `${percentage}% (${checkedCount} / ${totalCount})`;
+
+            if(listCard) {
+                let cardHtml = '';
+                checklistItems.slice(0, 4).forEach(i => {
+                    cardHtml += `<label class="flex items-start space-x-2 text-slate-700 cursor-pointer"><input type="checkbox" ${i.checked ? 'checked' : ''} onchange="toggleCheckItem('${i.id}', this.checked)" class="mt-0.5 rounded text-emerald-600"><span class="${i.checked ? 'line-through text-slate-400' : ''} text-xs leading-snug">${i.text}</span></label>`;
+                });
+                listCard.innerHTML = cardHtml;
+            }
+
+            if(listDetail) {
+                let detailHtml = ''; let currentGroup = '';
+                checklistItems.forEach(i => {
+                    if(i.group !== currentGroup) {
+                        currentGroup = i.group;
+                        detailHtml += `<h3 class="font-bold text-slate-800 text-xs pt-3 pb-1 border-b border-slate-200 text-emerald-700">${currentGroup}</h3>`;
+                    }
+                    detailHtml += `
+                        <div class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition border border-slate-100">
+                            <label class="flex items-center space-x-3 text-slate-800 cursor-pointer w-full">
+                                <input type="checkbox" ${i.checked ? 'checked' : ''} onchange="toggleCheckItem('${i.id}', this.checked)" class="w-4 h-4 rounded text-emerald-600">
+                                <span class="${i.checked ? 'line-through text-slate-400' : 'font-medium'} text-xs">${i.text}</span>
+                            </label>
+                            <span class="text-[10px] px-2 py-0.5 rounded ${i.checked ? 'bg-emerald-100 text-emerald-800 font-bold' : 'bg-slate-200 text-slate-500'}">${i.checked ? '구비 완료' : '미구비'}</span>
+                        </div>
+                    `;
+                });
+                listDetail.innerHTML = detailHtml;
+            }
+        }
+
+        function toggleCheckItem(id, isChecked) {
+            const item = checklistItems.find(i => i.id === id);
+            if(item) item.checked = isChecked;
+            saveAllDataToStorage();
+            renderChecklist();
+        }
+
+        function recalculateSummary() {
+            let totalSales = 0, totalPurchaseDeduct = 0, totalExpense = 0, totalAgendaDeduct = 0, cardSalesTotal = 0;
+            let salesCount = 0, purchaseCount = 0, expenseCount = 0;
+
+            const tbody = document.getElementById('transaction-rows');
+            if(tbody) tbody.innerHTML = '';
+
+            transactions.forEach(t => {
+                const isSales = t.type.includes('매출');
+                const isExpense = t.type.includes('일반지출');
+                const isAgenda = t.type.includes('의제매입');
+
+                if(isSales) { 
+                    totalSales += t.amount; 
+                    salesCount++; 
+                    if(t.type.includes('신용카드') || t.type.includes('현금영수증')) {
+                        cardSalesTotal += t.amount;
+                    }
+                }
+                else if(isExpense) { totalExpense += t.amount; expenseCount++; }
+                else if(isAgenda) {
+                    totalExpense += t.amount;
+                    totalAgendaDeduct += Math.round(t.amount * (8 / 108));
+                    purchaseCount++;
+                } else {
+                    const isVatDeductible = t.type.includes('세금계산서') || t.type.includes('신용카드') || t.type.includes('현금영수증');
+                    if (isVatDeductible && !t.type.includes('면세')) {
+                        totalPurchaseDeduct += (t.vat !== undefined ? t.vat : Math.round(t.amount * 0.1));
+                    }
+                    purchaseCount++;
+                }
+
+                const total = t.amount + (t.vat || 0);
+                const rowHtml = `
+                    <td class="py-2.5 px-3 font-mono-num text-slate-500">${t.date}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${isSales ? 'bg-emerald-100 text-emerald-800':(isAgenda?'bg-teal-100 text-teal-900':(isExpense?'bg-amber-100 text-amber-900':'bg-blue-100 text-blue-800'))}">${t.type}</span></td>
+                    <td class="py-2.5 px-3 font-mono-num text-slate-500 whitespace-nowrap">${t.bizNo || '123-45-67890'}</td>
+                    <td class="py-2.5 px-3 font-bold text-slate-800 truncate-text max-w-[130px]" title="${t.vendor}">${t.vendor}</td>
+                    <td class="py-2.5 px-3 text-slate-600 truncate-text max-w-[250px]" title="${t.memo || '-'}">${t.memo || '-'}</td>
+                    <td class="py-2.5 px-3 text-right font-mono-num font-bold text-slate-800 whitespace-nowrap">${formatNumber(total)} 원</td>
+                `;
+
+                if(tbody && salesCount + purchaseCount + expenseCount <= 5) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+                    tr.innerHTML = rowHtml; tbody.appendChild(tr);
+                }
+            });
+
+            const combinedPurchaseDeduct = totalPurchaseDeduct + totalAgendaDeduct;
+            const rawVat = Math.round(totalSales * currentVatRate * 0.1);
+            const cardDeduction = Math.min(10000000, Math.round(cardSalesTotal * 0.013));
+            
+            const vatBeforePrepaid = Math.max(0, rawVat - combinedPurchaseDeduct - cardDeduction);
+            const isExempt = totalSales < 48000000;
+            const actualVatToPay = isExempt ? 0 : Math.max(0, vatBeforePrepaid - (prepaidData.vat.amount || 0));
+
+            document.getElementById('summaryVatPrepaid').innerText = formatNumber(prepaidData.vat.amount) + ' 원';
+            document.getElementById('summaryIncomePrepaid').innerText = formatNumber(prepaidData.income.amount) + ' 원';
+            
+            let totalWithdraw = 0, totalInvest = 0;
+            ownerFundData.forEach(item => {
+                if(item.category === '대표자 인출금') totalWithdraw += item.amount;
+                else if(item.category === '사업주 투입금') totalInvest += item.amount;
+            });
+            const netOwnerFund = totalWithdraw - totalInvest;
+            document.getElementById('summaryNetOwnerFund').innerText = formatNumber(netOwnerFund) + ' 원';
+
+            document.getElementById('card-total-sales').innerText = formatNumber(totalSales) + ' 원';
+            document.getElementById('card-sales-count').innerText = '총 ' + salesCount + '건';
+            document.getElementById('card-total-purchase').innerText = formatNumber(combinedPurchaseDeduct) + ' 원';
+            document.getElementById('card-purchase-count').innerText = '총 ' + purchaseCount + '건';
+            document.getElementById('card-total-expense').innerText = formatNumber(totalExpense) + ' 원';
+            document.getElementById('card-expense-count').innerText = '총 ' + expenseCount + '건';
+            document.getElementById('card-estimated-tax').innerText = formatNumber(actualVatToPay) + ' 원';
+
+            document.getElementById('summary-sales').innerText = formatNumber(totalSales) + ' 원';
+            document.getElementById('summary-purchase').innerText = formatNumber(combinedPurchaseDeduct) + ' 원';
+            document.getElementById('summary-expense').innerText = formatNumber(totalExpense) + ' 원';
+            document.getElementById('summary-vat').innerText = formatNumber(actualVatToPay) + ' 원';
+
+            saveAllDataToStorage();
+            renderSchedules();
+            updateDiagnosticBanner(totalSales);
+            updateDetailedTaxCalculation();
+            renderCollectTable();
+        }
+
+        function updateDiagnosticBanner(totalSales) {
+            const banner = document.getElementById('revenueDiagnosticBanner');
+            const icon = document.getElementById('diagnosticIcon');
+            const title = document.getElementById('diagnosticTitle');
+            const desc = document.getElementById('diagnosticDesc');
+            const badge = document.getElementById('diagnosticBadge');
+            const currentRev = document.getElementById('diagCurrentRevenue');
+            const remRev = document.getElementById('diagRemainingRevenue');
+
+            if(!banner) return;
+
+            currentRev.innerText = formatNumber(totalSales) + '원';
+
+            if(totalSales < 48000000) {
+                banner.className = "p-5 rounded-2xl shadow-sm border border-emerald-200 bg-emerald-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all";
+                icon.className = "p-2.5 bg-emerald-600 text-white rounded-xl mt-0.5 shadow-sm";
+                title.innerText = "🟢 [1단계] 연 매출 4,800만 원 미만 예상 (부가가치세 납부의무 전액 면제)";
+                desc.innerText = "현재 예상 총 매출액이 4,800만 원 미만입니다. 부가가치세 신고는 이행해야 하지만 실제 납부할 부가가치세는 0원으로 전액 면제됩니다.";
+                badge.innerText = "납부면제 구간";
+                badge.className = "px-3 py-1 bg-emerald-200 text-emerald-900 font-bold text-xs rounded-full shadow-sm";
+                remRev.innerText = formatNumber(48000000 - totalSales) + '원';
+            } else if(totalSales < 80000000) {
+                banner.className = "p-5 rounded-2xl shadow-sm border border-amber-200 bg-amber-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all";
+                icon.className = "p-2.5 bg-amber-600 text-white rounded-xl mt-0.5 shadow-sm";
+                title.innerText = "🟡 [2단계] 연 매출 4,800만 원 ~ 8,000만 원 구간 (간이과세 세액 납부 대상)";
+                desc.innerText = "부가가치세 납부 면제 구간을 초과했습니다. 업종별 부가가치율 적용 산출세액에서 매입세액공제 및 카드발행공제 등을 차감한 세액을 납부하셔야 합니다.";
+                badge.innerText = "간이납부 구간";
+                badge.className = "px-3 py-1 bg-amber-200 text-amber-900 font-bold text-xs rounded-full shadow-sm";
+                remRev.innerText = formatNumber(80000000 - totalSales) + '원 (일반과세 전환까지)';
+            } else if(totalSales < 104000000) {
+                banner.className = "p-5 rounded-2xl shadow-sm border border-orange-200 bg-orange-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all";
+                icon.className = "p-2.5 bg-orange-600 text-white rounded-xl mt-0.5 shadow-sm";
+                title.innerText = "🟠 [3단계] 연 매출 8,000만 원 ~ 1억 4,000만 원 미만 (세금계산서 발행 의무 간이과세자)";
+                desc.innerText = "간이과세자 상태는 유지되지만, 사업자 고객 거래 시 세금계산서 의무 발행 대상입니다. 매출 증빙 관리에 각별히 유의하세요.";
+                badge.innerText = "세금계산서 발행의무";
+                badge.className = "px-3 py-1 bg-orange-200 text-orange-900 font-bold text-xs rounded-full shadow-sm";
+                remRev.innerText = formatNumber(104000000 - totalSales) + '원';
+            } else {
+                banner.className = "p-5 rounded-2xl shadow-sm border border-rose-200 bg-rose-50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all";
+                icon.className = "p-2.5 bg-rose-600 text-white rounded-xl mt-0.5 shadow-sm";
+                title.innerText = "🔴 [4단계] 연 매출 1억 4,000만 원 이상 예상 (다음 해 일반과세자 자동 전환)";
+                desc.innerText = "간이과세자 매출 한도를 초과하여 다음 해 7월 1일자로 일반과세자로 자동 전환될 예정입니다. 매입세액공제용 세금계산서 수취를 정밀하게 관리하세요.";
+                badge.innerText = "일반과세 전환예정";
+                badge.className = "px-3 py-1 bg-rose-200 text-rose-900 font-bold text-xs rounded-full shadow-sm";
+                remRev.innerText = "한도 초과";
+            }
+        }
+
+        function renderCollectTable() {
+            const collectTbody = document.getElementById('collect-table-rows');
+            if(!collectTbody) return; collectTbody.innerHTML = '';
+            transactions.forEach(t => {
+                const total = t.amount + (t.vat || 0);
+                collectTbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 border-b border-slate-100">
+                        <td class="py-2.5 px-3 font-mono-num text-slate-500">${t.date}</td>
+                        <td class="py-2.5 px-3 font-bold text-slate-700">${t.type}</td>
+                        <td class="py-2.5 px-3 font-mono-num text-slate-500 whitespace-nowrap">${t.bizNo || '123-45-67890'}</td>
+                        <td class="py-2.5 px-3 font-bold text-slate-800">${t.vendor}</td>
+                        <td class="py-2.5 px-3 text-slate-600">${t.memo || '-'}</td>
+                        <td class="py-2.5 px-3"><span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">${t.account || '기본'}</span></td>
+                        <td class="py-2.5 px-3 text-right font-mono-num">${formatNumber(t.amount)} 원</td>
+                        <td class="py-2.5 px-3 text-right font-mono-num text-blue-600">${formatNumber(t.vat || 0)} 원</td>
+                        <td class="py-2.5 px-3 text-right font-mono-num font-bold text-slate-800">${formatNumber(total)} 원</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function updateDetailedTaxCalculation() {
+            let salesBreakdown = { '매출(신용카드)': 0, '매출(현금영수증)': 0, '매출(세금계산서)': 0, '매출(계산서_면세)': 0, '매출(기타현금)': 0 };
+            let purchaseBreakdown = { '매입(세금계산서)': 0, '매입(계산서_면세)': 0, '매입(신용카드)': 0, '매입(현금영수증)': 0, '매입(면세농산물_의제매입)': 0 };
+            
+            let totalSales = 0, totalPurchaseDeduct = 0, totalAgendaDeduct = 0, totalExpenses = 0, cardSalesTotal = 0;
+            let expenseByAccount = {};
+
+            expenseAccounts.forEach(acc => { expenseByAccount[acc] = 0; });
+
+            transactions.forEach(t => {
+                if(t.type.includes('매출')) {
+                    totalSales += t.amount;
+                    if(salesBreakdown[t.type] !== undefined) salesBreakdown[t.type] += t.amount;
+                    else salesBreakdown['매출(기타현금)'] += t.amount;
+
+                    if(t.type.includes('신용카드') || t.type.includes('현금영수증')) {
+                        cardSalesTotal += t.amount;
+                    }
+                } else {
+                    const acc = t.account || '상품/원재료비';
+                    expenseByAccount[acc] = (expenseByAccount[acc] || 0) + t.amount;
+                    totalExpenses += t.amount;
+
+                    if(t.type.includes('의제매입')) {
+                        purchaseBreakdown['매입(면세농산물_의제매입)'] += t.amount;
+                        totalAgendaDeduct += Math.round(t.amount * (8 / 108));
+                    } else if(t.type.includes('세금계산서')) {
+                        purchaseBreakdown['매입(세금계산서)'] += t.amount;
+                        totalPurchaseDeduct += (t.vat !== undefined ? t.vat : Math.round(t.amount * 0.1));
+                    } else if(t.type.includes('계산서_면세')) {
+                        purchaseBreakdown['매입(계산서_면세)'] += t.amount;
+                    } else if(t.type.includes('신용카드')) {
+                        purchaseBreakdown['매입(신용카드)'] += t.amount;
+                        totalPurchaseDeduct += (t.vat !== undefined ? t.vat : Math.round(t.amount * 0.1));
+                    } else if(t.type.includes('현금영수증')) {
+                        purchaseBreakdown['매입(현금영수증)'] += t.amount;
+                        totalPurchaseDeduct += (t.vat !== undefined ? t.vat : Math.round(t.amount * 0.1));
+                    }
+                }
+            });
+
+            let salesHtml = '';
+            for(let key in salesBreakdown) {
+                const val = salesBreakdown[key];
+                salesHtml += `<div class="flex justify-between pl-2 text-slate-700 py-0.5"><span>• ${key}:</span><span class="font-bold ${val > 0 ? 'text-emerald-800' : 'text-slate-400'}">${formatNumber(val)} 원</span></div>`;
+            }
+            document.getElementById('vat-calc-sales-detail').innerHTML = salesHtml;
+
+            const taxBase = Math.round(totalSales * currentVatRate);
+            const rawVat = Math.round(taxBase * 0.1);
+            const combinedPurchaseDeduct = totalPurchaseDeduct + totalAgendaDeduct;
+            const cardDeduction = Math.min(10000000, Math.round(cardSalesTotal * 0.013));
+            document.getElementById('vat-calc-card-deduct').innerText = `- ${formatNumber(cardDeduction)} 원`;
+
+            const vatBeforePrepaid = Math.max(0, rawVat - combinedPurchaseDeduct - cardDeduction);
+            const isExempt = totalSales < 48000000;
+            const vatPrepaidVal = prepaidData.vat.amount || 0;
+            const actualVat = isExempt ? 0 : Math.max(0, vatBeforePrepaid - vatPrepaidVal);
+
+            document.getElementById('vat-calc-total-sales').innerText = formatNumber(totalSales) + ' 원';
+            document.getElementById('vat-calc-rate').innerText = (currentVatRate * 100) + '%';
+            document.getElementById('vat-calc-taxbase').innerText = formatNumber(taxBase) + ' 원';
+            document.getElementById('vat-calc-rawvat').innerText = formatNumber(rawVat) + ' 원';
+
+            let purchaseHtml = '';
+            for(let key in purchaseBreakdown) {
+                const val = purchaseBreakdown[key];
+                let dedVal = 0;
+                if(key.includes('의제매입')) dedVal = Math.round(val * (8 / 108));
+                else if(!key.includes('면세')) dedVal = Math.round(val * 0.1);
+
+                purchaseHtml += `
+                    <div class="flex justify-between pl-2 text-slate-700 py-0.5">
+                        <span>• ${key} (${formatNumber(val)}원):</span>
+                        <span class="font-bold ${dedVal > 0 ? 'text-blue-700' : 'text-slate-400'}">- ${formatNumber(dedVal)} 원 공제</span>
+                    </div>
+                `;
+            }
+            document.getElementById('vat-calc-purchase-detail').innerHTML = purchaseHtml;
+            document.getElementById('vat-calc-prepaid-display').innerText = `- ${formatNumber(vatPrepaidVal)} 원`;
+
+            const tag = document.getElementById('calc-exemption-tag');
+            if(isExempt) {
+                tag.innerText = '✨ 부가세 납부면제 (4,800만 원 미만)';
+                tag.className = 'px-2 py-0.5 bg-emerald-400 text-navy-900 font-bold text-[10px] rounded-full';
+            } else {
+                tag.innerText = '⚠️ 정상 납부 대상';
+                tag.className = 'px-2 py-0.5 bg-amber-400 text-navy-900 font-bold text-[10px] rounded-full';
+            }
+            document.getElementById('calc-final-vat').innerText = formatNumber(actualVat) + ' 원';
+
+            document.getElementById('calc-dtl-total-rev').innerText = formatNumber(totalSales) + ' 원';
+            document.getElementById('calc-dtl-total-exp').innerText = '- ' + formatNumber(totalExpenses) + ' 원';
+            
+            const netIncome = totalSales - totalExpenses;
+            document.getElementById('calc-dtl-income').innerText = formatNumber(netIncome) + ' 원';
+
+            const taxBaseIncome = Math.max(0, netIncome - 1500000); 
+            document.getElementById('calc-dtl-taxbase').innerText = formatNumber(taxBaseIncome) + ' 원';
+
+            const estIncomeTax = Math.max(0, taxBaseIncome * 0.06);
+            const incomePrepaidVal = prepaidData.income.amount || 0;
+            const finalIncomeTax = Math.max(0, estIncomeTax - incomePrepaidVal);
+
+            document.getElementById('calc-dtl-est-raw').innerText = `${formatNumber(estIncomeTax)} 원 (기납부 차감전)`;
+            document.getElementById('calc-dtl-prepaid-display').innerText = `- ${formatNumber(incomePrepaidVal)} 원`;
+            document.getElementById('calc-dtl-final-tax').innerText = formatNumber(finalIncomeTax) + ' 원';
+            document.getElementById('summary-tax-val').innerText = formatNumber(finalIncomeTax) + ' 원';
+
+            const expContainer = document.getElementById('account-expense-breakdown');
+            let expHtml = '';
+            for(let k in expenseByAccount) {
+                const val = expenseByAccount[k] || 0;
+                expHtml += `<div class="flex justify-between text-slate-600 py-1 border-b border-slate-50"><span>• ${k}:</span><span class="font-mono-num ${val > 0 ? 'font-bold text-slate-800' : 'text-slate-400'}">${formatNumber(val)} 원</span></div>`;
+            }
+            expContainer.innerHTML = expHtml;
+        }
+
+        function setPeriodFilter(type) {
+            const now = new Date();
+            const year = now.getFullYear();
+            let start = '', end = '';
+
+            if (type === 'all') {
+                start = ''; end = '';
+            } else if (type === 'this_month') {
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+                start = `${year}-${m}-01`;
+                end = `${year}-${m}-${lastDay}`;
+            } else if (type === 'q1') {
+                start = `${year}-01-01`; end = `${year}-03-31`;
+            } else if (type === 'q2') {
+                start = `${year}-04-01`; end = `${year}-06-30`;
+            } else if (type === 'q3') {
+                start = `${year}-07-01`; end = `${year}-09-30`;
+            } else if (type === 'q4') {
+                start = `${year}-10-01`; end = `${year}-12-31`;
+            }
+
+            const startEl = document.getElementById('filter-start-date');
+            const endEl = document.getElementById('filter-end-date');
+            if(startEl) startEl.value = start;
+            if(endEl) endEl.value = end;
+            renderLedgerEditableTable();
+        }
+
+        function renderLedgerEditableTable() {
+            const tbody = document.getElementById('full-ledger-rows');
+            if(!tbody) return; tbody.innerHTML = '';
+
+            const query = (document.getElementById('ledger-search-input')?.value || '').toLowerCase();
+            const startDate = document.getElementById('filter-start-date')?.value || '';
+            const endDate = document.getElementById('filter-end-date')?.value || '';
+
+            let filtered = transactions.filter(t => {
+                if (!t.date) return false;
+                const matchesStart = (!startDate || t.date >= startDate);
+                const matchesEnd = (!endDate || t.date <= endDate);
+                const matchesQuery = `${t.date} ${t.type} ${t.bizNo} ${t.vendor} ${t.memo} ${t.account}`.toLowerCase().includes(query);
+                return matchesStart && matchesEnd && matchesQuery;
+            });
+
+            if (currentSortOrder === 'desc') filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+            else filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            const newRowTr = document.createElement('tr');
+            newRowTr.className = 'ledger-new-row-container ledger-new-row';
+            newRowTr.innerHTML = `
+                <td class="py-2.5 px-2 text-center"><i class="fa-solid fa-pen-to-square text-emerald-600 text-xs"></i></td>
+                <td class="py-2.5 px-2"><input type="date" value="${todayStr}" class="recipe-input new-date font-mono-num" onkeydown="handleNewRowKeydown(event, this)"></td>
+                <td class="py-2.5 px-2">
+                    <select class="recipe-input new-type font-semibold" onchange="handleTypeChange(this)" onkeydown="handleNewRowKeydown(event, this)">
+                        <option value="매출(신용카드)" selected>매출(신용카드)</option>
+                        <option value="매출(현금영수증)">매출(현금영수증)</option>
+                        <option value="매출(세금계산서)">매출(세금계산서)</option>
+                        <option value="매출(계산서_면세)">매출(계산서_면세)</option>
+                        <option value="매출(기타현금)">매출(기타현금)</option>
+                        <option value="매입(세금계산서)">매입(세금계산서)</option>
+                        <option value="매입(계산서_면세)">매입(계산서_면세)</option>
+                        <option value="매입(신용카드)">매입(신용카드)</option>
+                        <option value="매입(현금영수증)">매입(현금영수증)</option>
+                        <option value="매입(면세농산물_의제매입)">매입(면세농산물_의제매입)</option>
+                        <option value="일반지출(간이영수증)">일반지출(간이영수증)</option>
+                        <option value="일반지출(인건비/급여)">일반지출(인건비/급여)</option>
+                    </select>
+                </td>
+                <td class="py-2.5 px-2"><input type="text" value="123-45-67890" class="recipe-input new-bizno font-mono-num" oninput="autoFormatRegistrationNo(this)" onkeydown="handleNewRowKeydown(event, this)"></td>
+                <td class="py-2.5 px-2"><input type="text" value="" placeholder="상호 / 거래처" class="recipe-input new-vendor font-bold" onkeydown="handleNewRowKeydown(event, this)"></td>
+                <td class="py-2.5 px-2"><input type="text" value="" placeholder="적요" class="recipe-input new-memo text-slate-700" onkeydown="handleNewRowKeydown(event, this)"></td>
+                <td class="py-2.5 px-2 relative">
+                    <input type="text" value="배달/플랫폼매출" class="recipe-input new-account" oninput="showAccountAutocomplete(this)" onfocus="showAccountAutocomplete(this)" onblur="hideAccountAutocomplete(this)" onkeydown="handleNewAccountKeydown(event, this)">
+                    <div class="custom-autocomplete-dropdown hidden"></div>
+                </td>
+                <td class="py-2.5 px-2 text-right"><input type="text" value="" placeholder="0" class="recipe-input new-amount text-right font-mono-num font-bold" oninput="updateNewRowTotal(this)" onkeydown="handlePlusShortcut(event); handleNewRowKeydown(event, this)"></td>
+                <td class="py-2.5 px-2 text-right"><input type="text" value="0" class="recipe-input new-vat text-right font-mono-num text-blue-600" oninput="formatInputValue(this)" onkeydown="handlePlusShortcut(event); handleNewRowKeydown(event, this)"></td>
+                <td class="py-2.5 px-2 text-right font-mono-num font-bold text-slate-800"><span id="new-row-total-display">0 원</span></td>
+                <td class="py-2.5 px-2 text-center text-emerald-600 font-bold text-[11px]">대기</td>
+            `;
+            tbody.appendChild(newRowTr);
+
+            filtered.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+                const total = t.amount + (t.vat || 0);
+
+                tr.innerHTML = `
+                    <td class="py-2.5 px-2 text-center"><input type="checkbox" value="${t.id}" class="ledger-row-checkbox rounded text-blue-600"></td>
+                    <td class="py-2.5 px-2"><input type="date" value="${t.date}" class="recipe-input ledger-date font-mono-num" onchange="updateExistingRow(${t.id}, this)"></td>
+                    <td class="py-2.5 px-2">
+                        <select class="recipe-input ledger-type font-semibold" onchange="handleTypeChange(this); updateExistingRow(${t.id}, this)">
+                            <option value="매출(신용카드)" ${t.type==='매출(신용카드)'?'selected':''}>매출(신용카드)</option>
+                            <option value="매출(현금영수증)" ${t.type==='매출(현금영수증)'?'selected':''}>매출(현금영수증)</option>
+                            <option value="매출(세금계산서)" ${t.type==='매출(세금계산서)'?'selected':''}>매출(세금계산서)</option>
+                            <option value="매출(계산서_면세)" ${t.type==='매출(계산서_면세)'?'selected':''}>매출(계산서_면세)</option>
+                            <option value="매출(기타현금)" ${t.type==='매출(기타현금)'?'selected':''}>매출(기타현금)</option>
+                            <option value="매입(세금계산서)" ${t.type==='매입(세금계산서)'?'selected':''}>매입(세금계산서)</option>
+                            <option value="매입(계산서_면세)" ${t.type==='매입(계산서_면세)'?'selected':''}>매입(계산서_면세)</option>
+                            <option value="매입(신용카드)" ${t.type==='매입(신용카드)'?'selected':''}>매입(신용카드)</option>
+                            <option value="매입(현금영수증)" ${t.type==='매입(현금영수증)'?'selected':''}>매입(현금영수증)</option>
+                            <option value="매입(면세농산물_의제매입)" ${t.type==='매입(면세농산물_의제매입)'?'selected':''}>매입(면세농산물_의제매입)</option>
+                            <option value="일반지출(간이영수증)" ${t.type==='일반지출(간이영수증)'?'selected':''}>일반지출(간이영수증)</option>
+                            <option value="일반지출(인건비/급여)" ${t.type==='일반지출(인건비/급여)'?'selected':''}>일반지출(인건비/급여)</option>
+                        </select>
+                    </td>
+                    <td class="py-2.5 px-2"><input type="text" value="${t.bizNo || '123-45-67890'}" class="recipe-input ledger-bizno font-mono-num" oninput="autoFormatRegistrationNo(this)" onchange="updateExistingRow(${t.id}, this)"></td>
+                    <td class="py-2.5 px-2"><input type="text" value="${t.vendor}" class="recipe-input ledger-vendor font-bold" onchange="updateExistingRow(${t.id}, this)"></td>
+                    <td class="py-2.5 px-2"><input type="text" value="${t.memo || ''}" class="recipe-input ledger-memo text-slate-700" onchange="updateExistingRow(${t.id}, this)"></td>
+                    <td class="py-2.5 px-2 relative">
+                        <input type="text" value="${t.account || '상품/원재료비'}" class="recipe-input ledger-account" oninput="showAccountAutocomplete(this)" onfocus="showAccountAutocomplete(this)" onblur="hideAccountAutocomplete(this)" onkeydown="handleAccountKeydown(event, this)" onchange="updateExistingRow(${t.id}, this)">
+                        <div class="custom-autocomplete-dropdown hidden"></div>
+                    </td>
+                    <td class="py-2.5 px-2 text-right"><input type="text" value="${formatNumber(t.amount)}" class="recipe-input ledger-amount text-right font-mono-num font-bold" oninput="formatInputValue(this); updateRowTotal(this)" onchange="updateExistingRow(${t.id}, this)" onkeydown="handlePlusShortcut(event)"></td>
+                    <td class="py-2.5 px-2 text-right"><input type="text" value="${formatNumber(t.vat || 0)}" class="recipe-input ledger-vat text-right font-mono-num text-blue-600" oninput="formatInputValue(this)" onchange="updateExistingRow(${t.id}, this)" onkeydown="handlePlusShortcut(event)"></td>
+                    <td class="py-2.5 px-2 text-right font-mono-num font-bold text-slate-800">${formatNumber(total)} 원</td>
+                    <td class="py-2.5 px-2 text-center"><button onclick="deleteTx(${t.id})" class="text-slate-300 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function bulkUpdateType() {
+            const checked = document.querySelectorAll('.ledger-row-checkbox:checked');
+            if(checked.length === 0) { alert('변경할 장부 항목을 체크해주세요.'); return; }
+            const newType = document.getElementById('bulk-type-select').value;
+            if(confirm(`선택한 ${checked.length}개 항목의 구분을 [${newType}]로 일괄 변경하시겠습니까?`)) {
+                const ids = Array.from(checked).map(chk => parseFloat(chk.value));
+                transactions.forEach(t => {
+                    if(ids.includes(t.id)) {
+                        t.type = newType;
+                        if(newType.includes('매출')) t.account = '배달/플랫폼매출';
+                        else if(newType.includes('인건비')) t.account = '인건비';
+                        else t.account = '상품/원재료비';
+                        
+                        if(!newType.includes('세금계산서') && !newType.includes('신용카드') && !newType.includes('현금영수증')) {
+                            t.vat = 0;
+                        } else if(t.vat === 0 && !newType.includes('면세')) {
+                            t.vat = Math.round(t.amount * 0.1);
+                        }
+                    }
+                });
+                recalculateSummary(); renderLedgerEditableTable();
+                alert('✨ 선택 항목의 구분이 일괄 변경되었습니다!');
+            }
+        }
+
+        function bulkUpdateAccount() {
+            const checked = document.querySelectorAll('.ledger-row-checkbox:checked');
+            if(checked.length === 0) { alert('변경할 장부 항목을 체크해주세요.'); return; }
+            const newAccount = document.getElementById('bulk-account-select').value;
+            if(confirm(`선택한 ${checked.length}개 항목의 계정과목을 [${newAccount}]로 일괄 변경하시겠습니까?`)) {
+                const ids = Array.from(checked).map(chk => parseFloat(chk.value));
+                transactions.forEach(t => {
+                    if(ids.includes(t.id)) t.account = newAccount;
+                });
+                recalculateSummary(); renderLedgerEditableTable();
+                alert('✨ 선택 항목의 계정과목이 일괄 변경되었습니다!');
+            }
+        }
+
+        function handleTypeChange(selectEl) {
+            const row = selectEl.closest('tr');
+            const accountInput = row.querySelector('.new-account') || row.querySelector('.ledger-account');
+            if(!accountInput) return;
+            const val = selectEl.value;
+            if(val.includes('매출')) accountInput.value = '배달/플랫폼매출';
+            else if(val.includes('인건비')) accountInput.value = '인건비';
+            else if(val.includes('계산서_면세')) accountInput.value = '소모품비';
+            else accountInput.value = '상품/원재료비';
+        }
+
+        function handlePlusShortcut(event) {
+            if (event.key === '+') {
+                event.preventDefault();
+                const input = event.target;
+                const num = parseInt(input.value.replace(/,/g, '')) || 0;
+                input.value = Number(num === 0 ? 1000 : num * 1000).toLocaleString();
+                input.dispatchEvent(new Event('input'));
+            }
+        }
+
+        function formatInputValue(inputEl) {
+            let val = inputEl.value.replace(/[^0-9]/g, '');
+            inputEl.value = val === '' ? '' : Number(val).toLocaleString();
+        }
+
+        function updateExistingRow(id, inputEl) {
+            const row = inputEl.closest('tr');
+            const t = transactions.find(item => item.id === id);
+            if(!t) return;
+            t.date = row.querySelector('.ledger-date').value;
+            t.type = row.querySelector('.ledger-type').value;
+            t.bizNo = row.querySelector('.ledger-bizno').value;
+            t.vendor = row.querySelector('.ledger-vendor').value;
+            t.memo = row.querySelector('.ledger-memo').value;
+            t.account = row.querySelector('.ledger-account').value;
+            t.amount = parseInt(row.querySelector('.ledger-amount').value.replace(/,/g, '')) || 0;
+            t.vat = parseInt(row.querySelector('.ledger-vat').value.replace(/,/g, '')) || 0;
+            recalculateSummary();
+        }
+
+        function handleNewRowKeydown(event, currentInput) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const row = currentInput.closest('tr');
+                const vendor = row.querySelector('.new-vendor').value.trim();
+                const amount = parseInt(row.querySelector('.new-amount').value.replace(/,/g, '')) || 0;
+                if (!vendor && amount === 0) { moveNextInput(currentInput); return; }
+                saveNewRowData(row);
+            }
+        }
+
+        function saveNewRowData(row) {
+            const date = row.querySelector('.new-date').value || new Date().toISOString().split('T')[0];
+            const type = row.querySelector('.new-type').value;
+            const bizNo = row.querySelector('.new-bizno').value || '123-45-67890';
+            const vendor = row.querySelector('.new-vendor').value || '거래처';
+            const memo = row.querySelector('.new-memo').value || '';
+            const account = row.querySelector('.new-account').value || '상품/원재료비';
+            const amount = parseInt(row.querySelector('.new-amount').value.replace(/,/g, '')) || 0;
+            const vat = parseInt(row.querySelector('.new-vat').value.replace(/,/g, '')) || 0;
+
+            transactions.unshift({ id: Date.now() + Math.random(), date, type, bizNo, vendor, memo, account, amount, vat });
+            recalculateSummary();
+            renderLedgerEditableTable();
+            const firstDate = document.querySelector('.ledger-new-row .new-date');
+            if(firstDate) firstDate.focus();
+        }
+
+        function moveNextInput(currentInput) {
+            const focusables = Array.from(document.getElementById('ledger-table').querySelectorAll('.recipe-input'));
+            const idx = focusables.indexOf(currentInput);
+            if(idx !== -1 && focusables[idx + 1]) focusables[idx + 1].focus();
+        }
+
+        function showAccountAutocomplete(input) {
+            const dropdown = input.nextElementSibling;
+            if(!dropdown) return;
+            const typeVal = input.closest('tr').querySelector('.new-type')?.value || input.closest('tr').querySelector('.ledger-type')?.value || '';
+            const targetList = typeVal.includes('매출') ? salesAccounts : expenseAccounts;
+            const keyword = input.value.trim().toLowerCase();
+            const matched = targetList.filter(acc => acc.toLowerCase().includes(keyword));
+            if(matched.length === 0) { dropdown.classList.add('hidden'); return; }
+            let html = '';
+            matched.forEach((acc, idx) => { html += `<div class="autocomplete-item ${idx===0?'selected':''}" onmousedown="selectAccountValue(this, '${acc}')">${acc}</div>`; });
+            dropdown.innerHTML = html; dropdown.classList.remove('hidden');
+        }
+
+        function hideAccountAutocomplete(input) { setTimeout(() => { const d = input.nextElementSibling; if(d) d.classList.add('hidden'); }, 200); }
+        function selectAccountValue(itemEl, value) { itemEl.closest('.custom-autocomplete-dropdown').previousElementSibling.value = value; itemEl.closest('.custom-autocomplete-dropdown').classList.add('hidden'); }
+        
+        function handleAccountKeydown(event, input) {
+            const dropdown = input.nextElementSibling;
+            const isVisible = dropdown && !dropdown.classList.contains('hidden');
+            const items = isVisible ? dropdown.querySelectorAll('.autocomplete-item') : [];
+            let selectedItem = dropdown ? dropdown.querySelector('.autocomplete-item.selected') : null;
+            if (event.key === 'ArrowDown' && isVisible && items.length > 0) {
+                event.preventDefault(); let idx = Array.from(items).indexOf(selectedItem);
+                if(idx < items.length - 1) { selectedItem?.classList.remove('selected'); items[idx+1].classList.add('selected'); items[idx+1].scrollIntoView({block:'nearest'}); }
+            } else if (event.key === 'ArrowUp' && isVisible && items.length > 0) {
+                event.preventDefault(); let idx = Array.from(items).indexOf(selectedItem);
+                if(idx > 0) { selectedItem?.classList.remove('selected'); items[idx-1].classList.add('selected'); items[idx-1].scrollIntoView({block:'nearest'}); }
+            } else if (event.key === 'Enter' && isVisible && selectedItem) {
+                event.preventDefault(); input.value = selectedItem.innerText; dropdown.classList.add('hidden'); moveNextInput(input);
+            } else if (event.key === 'Enter') { event.preventDefault(); moveNextInput(input); }
+        }
+
+        function handleNewAccountKeydown(event, input) {
+            handleAccountKeydown(event, input);
+            if (event.key === 'Enter' && input.nextElementSibling.classList.contains('hidden')) moveNextInput(input);
+        }
+
+        function updateRowTotal(amountInput) {
+            const row = amountInput.closest('tr');
+            const amount = parseInt(amountInput.value.replace(/,/g, '')) || 0;
+            const vatInput = row.querySelector('.ledger-vat');
+            const typeSelect = row.querySelector('.ledger-type');
+            if(typeSelect && (typeSelect.value.includes('세금계산서') || typeSelect.value.includes('신용카드') || typeSelect.value.includes('현금영수증')) && !typeSelect.value.includes('면세') && !typeSelect.value.includes('의제매입')) {
+                vatInput.value = formatNumber(Math.round(amount * 0.1));
+            } else { vatInput.value = '0'; }
+        }
+
+        function updateNewRowTotal(amountInput) {
+            const row = amountInput.closest('tr');
+            const amount = parseInt(amountInput.value.replace(/,/g, '')) || 0;
+            const vatInput = row.querySelector('.new-vat');
+            const typeSelect = row.querySelector('.new-type');
+            let vat = 0;
+            if(typeSelect && (typeSelect.value.includes('세금계산서') || typeSelect.value.includes('신용카드') || typeSelect.value.includes('현금영수증')) && !typeSelect.value.includes('면세') && !typeSelect.value.includes('의제매입')) {
+                vat = Math.round(amount * 0.1); vatInput.value = formatNumber(vat);
+            } else { vatInput.value = '0'; }
+            row.querySelector('#new-row-total-display').innerText = formatNumber(amount + vat) + ' 원';
+        }
+
+        function filterLedgerTable() { renderLedgerEditableTable(); }
+        function toggleSelectAll(master) { document.querySelectorAll('.ledger-row-checkbox').forEach(chk => { chk.checked = master.checked; }); }
+        
+        function deleteSelectedTransactions() {
+            const checked = document.querySelectorAll('.ledger-row-checkbox:checked');
+            if(checked.length === 0) { alert('삭제할 항목을 체크해주세요.'); return; }
+            if(confirm(`선택한 ${checked.length}개의 내역을 삭제하시겠습니까?`)) {
+                const ids = Array.from(checked).map(chk => parseFloat(chk.value));
+                transactions = transactions.filter(t => !ids.includes(t.id));
+                recalculateSummary(); renderLedgerEditableTable();
+            }
+        }
+        function deleteTx(id) {
+            if(confirm('삭제하시겠습니까?')) {
+                transactions = transactions.filter(t => t.id !== id);
+                recalculateSummary(); renderLedgerEditableTable();
+            }
+        }
+
+        function openOwnerFundModal() {
+            document.getElementById('of-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('of-amount').value = '';
+            document.getElementById('of-memo').value = '';
+            document.getElementById('owner-fund-modal').classList.remove('hidden');
+        }
+        function closeOwnerFundModal() { document.getElementById('owner-fund-modal').classList.add('hidden'); }
+        
+        function handleSaveOwnerFund(e) {
+            e.preventDefault();
+            const date = document.getElementById('of-date').value;
+            const category = document.getElementById('of-category').value;
+            const amount = parseInt(document.getElementById('of-amount').value.replace(/,/g, '')) || 0;
+            const memo = document.getElementById('of-memo').value;
+
+            ownerFundData.unshift({ id: Date.now(), date, category, amount, memo });
+            saveAllDataToStorage(); closeOwnerFundModal(); renderOwnerFundTable(); recalculateSummary();
+            alert('✨ 대표자 자금 이동 내역이 안전하게 등록되었습니다!');
+        }
+
+        function deleteOwnerFund(id) {
+            if(confirm('해당 내역을 삭제하시겠습니까?')) {
+                ownerFundData = ownerFundData.filter(item => item.id !== id);
+                saveAllDataToStorage(); renderOwnerFundTable(); recalculateSummary();
+            }
+        }
+
+        function renderOwnerFundTable() {
+            const tbody = document.getElementById('owner-fund-table-body');
+            if(!tbody) return;
+            if(ownerFundData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400">등록된 대표자 자금 이동 내역이 없습니다.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = ownerFundData.map(item => `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                    <td class="py-2.5 px-4 font-mono-num text-slate-600">${item.date}</td>
+                    <td class="py-2.5 px-4"><span class="px-2 py-0.5 rounded font-bold text-[11px] ${item.category === '대표자 인출금' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">${item.category}</span></td>
+                    <td class="py-2.5 px-4 text-slate-800">${item.memo}</td>
+                    <td class="py-2.5 px-4 text-right font-mono-num font-bold ${item.category === '대표자 인출금' ? 'text-amber-700' : 'text-blue-700'}">${formatNumber(item.amount)} 원</td>
+                    <td class="py-2.5 px-4 text-center"><button onclick="deleteOwnerFund(${item.id})" class="text-slate-300 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></td>
+                </tr>
+            `).join('');
+        }
+
+        function openPrepaidModal(type) {
+            document.getElementById('prepaid-type').value = type;
+            document.getElementById('prepaid-modal-title').innerText = type === 'vat' ? '🔵 부가세 예정고지 납부액 등록' : '🟣 종소세 중간예납 납부액 등록';
+            document.getElementById('prepaid-date').value = prepaidData[type].date || new Date().toISOString().split('T')[0];
+            document.getElementById('prepaid-amount').value = formatNumber(prepaidData[type].amount || 0);
+            document.getElementById('prepaid-modal').classList.remove('hidden');
+        }
+        function closePrepaidModal() { document.getElementById('prepaid-modal').classList.add('hidden'); }
+        function savePrepaidAmount() {
+            const type = document.getElementById('prepaid-type').value;
+            const date = document.getElementById('prepaid-date').value;
+            const amount = parseInt(document.getElementById('prepaid-amount').value.replace(/,/g, '')) || 0;
+            prepaidData[type] = { date, amount };
+            saveAllDataToStorage(); closePrepaidModal(); recalculateSummary();
+            alert('✨ 기납부액이 정상 반영되었습니다!');
+        }
+
+        function getYearlyTaxSchedules(year) {
+            let result = [];
+            for (let m = 1; m <= 12; m++) {
+                const mm = m < 10 ? '0' + m : m;
+                result.push({ month: m, date: `${year}-${mm}-10`, title: '원천세 매월 신고납부', desc: '전월분 원천징수 세액 신고 및 납부' });
+                if (m === 1) result.push({ month: 1, date: `${year}-01-25`, title: '⭐ 간이과세자 부가세 확정신고', desc: '연간 부가가치세 최종 확정신고 및 납부' });
+                else if (m === 5) result.push({ month: 5, date: `${year}-05-31`, title: '⭐ 종합소득세 확정신고', desc: '전년도 사업소득 종합소득세 최종 신고' });
+                else if (m === 7) result.push({ month: 7, date: `${year}-07-25`, title: '부가가치세 예정고지 납부', desc: '직전 과세기간 세액 50% 예정고지 납부' });
+                else if (m === 11) result.push({ month: 11, date: `${year}-11-30`, title: '종합소득세 중간예납 납부', desc: '종소세 중간예납 고지서 확인 및 납부' });
+            }
+            return result;
+        }
+
+        function renderSchedules() {
+            const list = document.getElementById('schedule-list');
+            const vatDday = calculateDday('2027-01-25');
+            if(list) {
+                list.innerHTML = `
+                    <div class="flex justify-between items-center font-bold text-slate-800 bg-emerald-50 p-1.5 rounded border border-emerald-200"><span>간이과세자 부가세 확정신고</span><span class="px-1.5 py-0.5 bg-emerald-600 text-white rounded font-black text-[10px]">${vatDday >= 0 ? '1/25 (D-' + vatDday + ')' : '1/25 마감'}</span></div>
+                    <div class="flex justify-between items-center text-slate-700 bg-blue-50 p-1.5 rounded border border-blue-100"><span>원천세 매월 납부</span><span class="px-1.5 py-0.5 bg-blue-600 text-white rounded font-bold text-[10px]">매월 10일</span></div>
+                    <div class="flex justify-between items-center text-slate-600"><span>종합소득세 중간예납</span><span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px]">11/30</span></div>
+                `;
+            }
+        }
+
+        function changeMonth(d) {
+            calendarMonth += d;
+            if(calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
+            else if(calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
+            renderCalendar(); renderMasterScheduleList();
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            if(!grid) return; grid.innerHTML = '';
+            document.getElementById('calendar-month-year').innerText = `${calendarYear}년 ${calendarMonth + 1}월`;
+            const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+            const totalDays = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+            for(let i=0; i<firstDay; i++) grid.innerHTML += `<div class="bg-slate-50 calendar-day p-1"></div>`;
+            const m = calendarMonth + 1; const mm = m < 10 ? '0' + m : m;
+            const schedules = getYearlyTaxSchedules(calendarYear).filter(s => s.month === m);
+
+            for(let d=1; d<=totalDays; d++) {
+                const dd = d < 10 ? '0' + d : d; const dateStr = `${calendarYear}-${mm}-${dd}`;
+                const evs = schedules.filter(s => s.date === dateStr);
+                const notes = customNotes.filter(n => n.date === dateStr);
+                let html = `<div class="bg-white calendar-day p-1 flex flex-col justify-between hover:bg-emerald-50/40 cursor-pointer" onclick="openNoteModalForDate('${dateStr}')"><span class="font-bold ${d%7===0?'text-blue-600':(d%7===1?'text-red-500':'text-slate-700')}">${d}</span><div class="space-y-0.5 mt-0.5">`;
+                evs.forEach(e => html += `<div class="bg-amber-100 text-amber-900 text-[9px] p-0.5 rounded truncate font-bold">⭐ ${e.title}</div>`);
+                notes.forEach(n => html += `<div class="bg-blue-100 text-blue-900 text-[9px] p-0.5 rounded truncate font-bold">📌 ${n.title}</div>`);
+                html += `</div></div>`; grid.innerHTML += html;
+            }
+        }
+
+        function renderMasterScheduleList() {
+            const container = document.getElementById('master-tax-schedule-list');
+            if(!container) return; container.innerHTML = '';
+            const m = calendarMonth + 1; const mm = m < 10 ? '0' + m : m;
+            const schedules = getYearlyTaxSchedules(calendarYear).filter(s => s.month === m);
+            const monthNotes = customNotes.filter(n => n.date && n.date.startsWith(`${calendarYear}-${mm}`));
+            let html = `<div class="p-3 bg-slate-50 rounded-xl border mb-2"><h4 class="font-bold text-slate-800 text-xs">⭐ ${calendarYear}년 ${m}월 세무 마감 및 메모 안내</h4></div>`;
+            schedules.forEach(s => {
+                const dday = calculateDday(s.date);
+                const ddayText = dday >= 0 ? `D-${dday}` : '마감완료';
+                html += `<div class="p-3 bg-slate-50 rounded-xl border flex flex-col space-y-1"><div class="font-bold text-slate-800 flex justify-between"><span>${s.title}</span><span class="px-1.5 py-0.5 bg-emerald-500 text-navy-900 rounded font-black text-[10px]">${ddayText}</span></div><p class="text-slate-500 text-[11px]">${s.desc}</p></div>`;
+            });
+            monthNotes.forEach(n => {
+                html += `<div class="p-3 bg-blue-50/50 rounded-xl border border-blue-200 flex flex-col space-y-1"><div class="font-bold text-blue-900 flex justify-between"><span>📌 ${n.title}</span><button onclick="deleteNote(${n.id})" class="text-rose-500 hover:text-rose-700 text-xs font-bold">🗑️ 삭제</button></div><p class="text-slate-600 text-[11px]">${n.desc}</p></div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function openNoteModal() {
+            document.getElementById('note-edit-id').value = '';
+            document.getElementById('note-date').value = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-15`;
+            document.getElementById('note-title').value = '';
+            document.getElementById('note-desc').value = '';
+            document.getElementById('note-modal').classList.remove('hidden');
+        }
+        function openNoteModalForDate(dateStr) {
+            document.getElementById('note-edit-id').value = '';
+            document.getElementById('note-date').value = dateStr;
+            document.getElementById('note-title').value = '';
+            document.getElementById('note-desc').value = '';
+            document.getElementById('note-modal').classList.remove('hidden');
+        }
+        function closeNoteModal() { document.getElementById('note-modal').classList.add('hidden'); }
+        function saveNote() {
+            const title = document.getElementById('note-title').value.trim();
+            if(!title) { alert('메모 제목을 입력하세요.'); return; }
+            const date = document.getElementById('note-date').value;
+            const desc = document.getElementById('note-desc').value.trim();
+            
+            customNotes.push({ id: Date.now(), date, title, desc });
+            saveAllDataToStorage(); closeNoteModal(); renderCalendar(); renderMasterScheduleList();
+            alert('✨ 일정 메모가 추가되었습니다!');
+        }
+        function deleteNote(id) {
+            if(confirm('이 메모를 삭제하시겠습니까?')) {
+                customNotes = customNotes.filter(n => n.id !== id);
+                saveAllDataToStorage(); renderCalendar(); renderMasterScheduleList();
+            }
+        }
+
+        function handleExcelDrop(e) { e.preventDefault(); if(e.dataTransfer.files.length) parseHometaxExcel(e.dataTransfer.files[0]); }
+        function handleExcelUpload(files) { if(files.length) parseHometaxExcel(files[0]); }
+        
+        function parseHometaxExcel(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonRows = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+
+                    let addedCount = 0;
+                    let headerRowIdx = -1, dateIdx = -1, bizNoIdx = -1, vendorIdx = -1, amountIdx = -1, vatIdx = -1, memoIdx = -1;
+
+                    for (let i = 0; i < jsonRows.length; i++) {
+                        const row = jsonRows[i];
+                        if (!row) continue;
+                        const rowStr = row.map(cell => String(cell || '').trim());
+                        const foundDateIdx = rowStr.findIndex(val => val === '작성일자' || val === '발급일자');
+                        if (foundDateIdx !== -1) {
+                            headerRowIdx = i;
+                            dateIdx = foundDateIdx;
+                            bizNoIdx = rowStr.findIndex(val => (val.includes('공급자') && val.includes('사업자')) || val.includes('사업자등록번호'));
+                            vendorIdx = rowStr.findIndex(val => val === '상호' || (val.includes('공급자') && val.includes('상호')));
+                            
+                            memoIdx = rowStr.findIndex(val => val === '품목명' || val === '품목' || val.includes('품목명'));
+                            if (memoIdx === -1) {
+                                memoIdx = rowStr.findIndex(val => val.includes('적요') || val.includes('비고'));
+                            }
+
+                            amountIdx = rowStr.findIndex(val => val === '공급가액');
+                            if (amountIdx === -1) amountIdx = rowStr.findIndex(val => val.includes('공급가액'));
+                            vatIdx = rowStr.findIndex(val => val === '세액');
+                            break;
+                        }
+                    }
+
+                    if (headerRowIdx === -1) { alert('⚠️ 홈택스 엑셀 파일 양식을 인식할 수 없습니다.'); return; }
+
+                    for (let i = headerRowIdx + 1; i < jsonRows.length; i++) {
+                        const row = jsonRows[i];
+                        if (!row || row.length === 0) continue;
+                        let dateStr = '';
+                        if (dateIdx !== -1 && row[dateIdx]) {
+                            let cStr = String(row[dateIdx]).trim();
+                            if (/^\d{4}[-./]\d{2}[-./]\d{2}$/.test(cStr)) dateStr = cStr.replace(/[-./]/g, '-');
+                            else if (/^\d{8}$/.test(cStr)) dateStr = `${cStr.slice(0,4)}-${cStr.slice(4,6)}-${cStr.slice(6,8)}`;
+                        }
+                        if (!dateStr) continue;
+                        let bizNo = (bizNoIdx !== -1 && row[bizNoIdx]) ? String(row[bizNoIdx]).trim() : '123-45-67890';
+                        let vendor = (vendorIdx !== -1 && row[vendorIdx]) ? String(row[vendorIdx]).trim() : '홈택스 거래처';
+                        
+                        let memo = (memoIdx !== -1 && row[memoIdx]) ? String(row[memoIdx]).trim() : '';
+                        if (!memo) {
+                            let fallbackMemoIdx = row.findIndex((c, idx) => idx >= 18 && idx <= 25 && String(c || '').trim().length > 1);
+                            if (fallbackMemoIdx !== -1) memo = String(row[fallbackMemoIdx]).trim();
+                            else memo = '홈택스 엑셀 업로드';
+                        }
+
+                        let amount = (amountIdx !== -1 && row[amountIdx] !== undefined) ? Number(String(row[amountIdx]).replace(/,/g, '')) || 0 : 0;
+                        let vat = (vatIdx !== -1 && row[vatIdx] !== undefined) ? Number(String(row[vatIdx]).replace(/,/g, '')) || 0 : Math.round(amount * 0.1);
+                        let rowFullStr = row.map(c => String(c || '')).join(' ');
+                        let typeStr = '매입(세금계산서)';
+                        if (rowFullStr.includes('계산서') && !rowFullStr.includes('세금')) { typeStr = '매입(계산서_면세)'; vat = 0; }
+                        else if (rowFullStr.includes('현금영수증')) { typeStr = '매입(현금영수증)'; }
+                        else if (rowFullStr.includes('매출')) { typeStr = '매출(신용카드)'; }
+
+                        transactions.unshift({
+                            id: Date.now() + Math.random(),
+                            date: dateStr, type: typeStr, bizNo: bizNo, vendor: vendor, memo: memo,
+                            account: typeStr.includes('매출') ? '배달/플랫폼매출' : '상품/원재료비', amount: amount, vat: vat
+                        });
+                        addedCount++;
+                    }
+
+                    if (addedCount > 0) {
+                        alert(`✨ 홈택스 엑셀 파일에서 ${addedCount}건의 증빙 내역을 품목명 적요와 함께 정확하게 불러왔습니다!`);
+                        recalculateSummary(); switchTab('collect');
+                    } else { alert('⚠️ 엑셀 데이터 영역에서 유효한 행을 추출하지 못했습니다.'); }
+                } catch(err) { alert('⚠️ 엑셀 파싱 중 오류가 발생했습니다: ' + err.message); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        function handleFileDrop(e) { e.preventDefault(); if(e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files); }
+
+        async function handleFileUpload(files) {
+            if(!userApiKey) { alert('⚠️ API 키가 설정되지 않았습니다.'); openApiKeyModal(); return; }
+            const statusEl = document.getElementById('parsing-status');
+            if(statusEl) statusEl.innerText = 'Gemini AI 정밀 분석 중...';
+            try {
+                for(let file of files) {
+                    const base64Data = await fileToBase64(file);
+                    let mimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${userApiKey}`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [
+                                    { text: `이 영수증 또는 세금계산서 문서를 분석해서 마크다운 형식이나 설명 없이 오직 JSON 텍스트 하나만 출력해줘. 예시: {"type": "매입(세금계산서)", "vendor": "상호명", "memo": "구매품목 상세명", "amount": 100000, "vat": 10000, "date": "YYYY-MM-DD", "bizNo": "123-45-67890", "account": "소모품비"}` },
+                                    { inline_data: { mime_type: mimeType, data: base64Data } }
+                                ]
+                            }]
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.error) throw new Error(result.error.message || 'Gemini API 호출 실패');
+                    let rawText = result.candidates[0].content.parts[0].text.trim().replace(/```json/g, '').replace(/```/g, '').trim();
+                    let parsed = JSON.parse(rawText);
+
+                    pendingAiData = {
+                        id: Date.now() + Math.random(),
+                        date: parsed.date || new Date().toISOString().split('T')[0],
+                        type: parsed.type || '매입(세금계산서)',
+                        bizNo: parsed.bizNo || '123-45-67890',
+                        vendor: parsed.vendor || file.name || 'AI인식 거래처',
+                        memo: parsed.memo || 'AI 영수증 자동추출',
+                        account: parsed.account || '소모품비',
+                        amount: parseInt(parsed.amount) || 0,
+                        vat: parseInt(parsed.vat) || Math.round((parseInt(parsed.amount) || 0) * 0.1)
+                    };
+                    showAiResultModal(pendingAiData);
+                }
+                if(statusEl) statusEl.innerText = '✨ AI 분석 완료!';
+            } catch(error) {
+                if(statusEl) statusEl.innerText = '분석 실패 ⚠️';
+                alert('AI 영수증 인식 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        function showAiResultModal(data) {
+            const container = document.getElementById('ai-result-details');
+            if(container) {
+                const total = data.amount + data.vat;
+                container.innerHTML = `
+                    <div class="flex justify-between py-1 border-b"><span class="text-slate-500">거래일자:</span><span class="font-bold">${data.date}</span></div>
+                    <div class="flex justify-between py-1 border-b"><span class="text-slate-500">구분:</span><span class="font-bold text-emerald-700">${data.type}</span></div>
+                    <div class="flex justify-between py-1 border-b"><span class="text-slate-500">상호명:</span><span class="font-bold">${data.vendor}</span></div>
+                    <div class="flex justify-between py-1 border-b"><span class="text-slate-500">적요:</span><span class="font-bold text-blue-700">${data.memo}</span></div>
+                    <div class="flex justify-between py-1 border-b"><span class="text-slate-500">공급가액:</span><span class="font-bold">${formatNumber(data.amount)} 원</span></div>
+                    <div class="flex justify-between py-1.5 bg-emerald-100 px-2 rounded mt-1 font-bold"><span>총 합계:</span><span>${formatNumber(total)} 원</span></div>
+                `;
+            }
+            document.getElementById('ai-result-modal').classList.remove('hidden');
+        }
+        function closeAiResultModal() { document.getElementById('ai-result-modal').classList.add('hidden'); pendingAiData = null; }
+        function confirmAiResultToLedger() {
+            if(pendingAiData) {
+                transactions.unshift(pendingAiData);
+                recalculateSummary(); closeAiResultModal(); switchTab('collect');
+                alert('✨ AI 영수증 분석 결과가 장부에 성공적으로 등록되었습니다!');
+            }
+        }
+
+        async function downloadOfficialTaxXLSX() {
+            let totalSales = 0, totalPurchaseDeduct = 0, totalAgendaDeduct = 0, totalExpenses = 0, cardSalesTotal = 0;
+            let expenseByAccount = {};
+            expenseAccounts.forEach(acc => { expenseByAccount[acc] = 0; });
+
+            transactions.forEach(t => {
+                if(t.type.includes('매출')) { 
+                    totalSales += t.amount; 
+                    if(t.type.includes('신용카드') || t.type.includes('현금영수증')) {
+                        cardSalesTotal += t.amount;
+                    }
+                } else {
+                    const acc = t.account || '상품/원재료비';
+                    expenseByAccount[acc] = (expenseByAccount[acc] || 0) + t.amount;
+                    totalExpenses += t.amount;
+                    if(t.type.includes('의제매입')) totalAgendaDeduct += Math.round(t.amount * (8 / 108));
+                    else if(t.type.includes('세금계산서') || t.type.includes('신용카드')) totalPurchaseDeduct += (t.vat !== undefined ? t.vat : Math.round(t.amount * 0.1));
+                }
+            });
+
+            const combinedPurchaseDeduct = totalPurchaseDeduct + totalAgendaDeduct;
+            const taxBase = Math.round(totalSales * currentVatRate);
+            const rawVat = Math.round(taxBase * 0.1);
+            const cardDeduction = Math.min(10000000, Math.round(cardSalesTotal * 0.013));
+            
+            const vatBeforePrepaid = Math.max(0, rawVat - combinedPurchaseDeduct - cardDeduction);
+            const isExempt = totalSales < 48000000;
+            const actualVat = isExempt ? 0 : Math.max(0, vatBeforePrepaid - (prepaidData.vat.amount || 0));
+            
+            const netIncome = totalSales - totalExpenses;
+            const estIncomeTax = Math.max(0, (netIncome - 1500000) * 0.06);
+            const finalIncomeTax = Math.max(0, estIncomeTax - (prepaidData.income.amount || 0));
+
+            const workbook = new ExcelJS.Workbook();
+            const fontTitle = { name: '맑은 고딕', size: 13, bold: true, color: { argb: '1E3A8A' } };
+            const fontSection = { name: '맑은 고딕', size: 11, bold: true, color: { argb: '0F766E' } };
+            const fontBold = { name: '맑은 고딕', size: 10, bold: true, color: { argb: '1F2937' } };
+            const thinBorder = { top: { style: 'thin', color: { argb: 'CBD5E1' } }, left: { style: 'thin', color: { argb: 'CBD5E1' } }, bottom: { style: 'thin', color: { argb: 'CBD5E1' } }, right: { style: 'thin', color: { argb: 'CBD5E1' } } };
+            const fillHeader = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F1F5F9' } };
+            const fillTitle = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EFF6FF' } };
+
+            const sheet1 = workbook.addWorksheet('세무산출보고서', { views: [{ showGridLines: true }] });
+            sheet1.columns = [{ width: 45 }, { width: 30 }];
+            sheet1.addRow(['[얌의 세무노트] 간이사업자 세무 세분화 상세 산출 보고서']);
+            sheet1.mergeCells('A1:B1'); sheet1.getRow(1).height = 32;
+            sheet1.getCell('A1').font = fontTitle; sheet1.getCell('A1').fill = fillTitle;
+            sheet1.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
+
+            sheet1.addRow([]); sheet1.addRow(['■ 1. 부가가치세 산출 내역']); sheet1.getCell('A3').font = fontSection;
+            sheet1.addRow(['구분 항목 명세', '금액 (원)']);
+            sheet1.addRow(['연간 총 공급대가(매출)', totalSales]);
+            sheet1.addRow(['과세표준', taxBase]);
+            sheet1.addRow(['간이산출세액', rawVat]);
+            sheet1.addRow(['매입세액 및 의제공제', combinedPurchaseDeduct]);
+            sheet1.addRow(['신용카드/현금영수증 발행세액공제 (1.3%)', cardDeduction]);
+            sheet1.addRow(['부가가치세 예정고지 기납부액', prepaidData.vat.amount || 0]);
+            sheet1.addRow(['납부면제 여부', isExempt ? "면제 대상 (4,800만원 미만)" : "정상 납부 대상"]);
+            sheet1.addRow(['최종 차감 납부할 부가가치세', actualVat]);
+
+            sheet1.addRow([]); sheet1.addRow(['■ 2. 추정 종합소득세 및 필요경비']); sheet1.getCell('A15').font = fontSection;
+            sheet1.addRow(['구분 항목 명세', '금액 (원)']);
+            sheet1.addRow(['총 수입금액', totalSales]);
+            sheet1.addRow(['필요경비 총액', totalExpenses]);
+            sheet1.addRow(['소득금액', netIncome]);
+            sheet1.addRow(['종합소득세 중간예납 기납부액', prepaidData.income.amount || 0]);
+            sheet1.addRow(['최종 차감 납부할 종합소득세', finalIncomeTax]);
+
+            sheet1.eachRow({ includeEmpty: false }, function(row, rNum) {
+                if (rNum === 4 || rNum === 16) {
+                    row.eachCell(c => { c.fill = fillHeader; c.font = fontBold; c.border = thinBorder; c.alignment = { horizontal: 'center', vertical: 'middle' }; });
+                }
+            });
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), '얌의세무노트_공식세무서식보고서.xlsx');
+        }
+
+        window.onload = function() {
+            updateUrgentBanner();
+            checkApiKeyStatus();
+            recalculateSummary();
+            renderChecklist();
+            renderCalendar();
+            renderMasterScheduleList();
+            renderCollectTable();
+            renderOwnerFundTable();
+            setPeriodFilter('this_month');
+        };
+    </script>
+</body>
+</html>
